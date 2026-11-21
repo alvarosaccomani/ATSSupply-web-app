@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { UserLayoutComponent } from './user-layout.component';
 
 describe('UserLayoutComponent', () => {
@@ -8,6 +9,7 @@ describe('UserLayoutComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [UserLayoutComponent],
+      providers: [provideRouter([])]
     }).compileComponents();
 
     fixture = TestBed.createComponent(UserLayoutComponent);

@@ -1,3 +1,163 @@
-<div class="user-layout-container">
-  <router-outlet></router-outlet>
+<!-- Barra de Simulación de Feature Flags y Roles -->
+<div class="config-bar py-2 px-3">
+  <div class="container-fluid d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <span class="fw-semibold text-info"><i class="bi bi-sliders me-1"></i>Módulos Activos:</span>
+      <div class="form-check form-switch mb-0">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="flagProduction"
+          [checked]="hasProduction()"
+          (change)="toggleProduction()"
+        />
+        <label class="form-check-label" for="flagProduction">Producción</label>
+      </div>
+      <div class="form-check form-switch mb-0">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="flagSales"
+          [checked]="hasSales()"
+          (change)="toggleSales()"
+        />
+        <label class="form-check-label" for="flagSales">Preventa/Reparto</label>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <span class="d-none d-lg-inline text-secondary"><i class="bi bi-display me-1"></i>Vista Escritorio / Tablet / Móvil</span>
+      <div class="d-flex align-items-center gap-2">
+        <span class="text-secondary">Rol:</span>
+        <select
+          id="roleSelector"
+          class="form-select form-select-sm bg-dark text-white border-secondary py-0"
+          style="width: auto;"
+          [value]="role()"
+          (change)="onRoleChange($any($event.target).value)"
+        >
+          <option value="OWNER">Dueño / Admin</option>
+          <option value="SELLER">Vendedor (Calle)</option>
+          <option value="DRIVER">Repartidor (Camioneta)</option>
+        </select>
+      </div>
+    </div>
+  </div>
 </div>
+
+<div class="app-shell">
+  <!-- SIDEBAR FIJO (TABLET Y PC >= 768px) -->
+  <aside class="ats-sidebar d-none d-md-flex">
+    <div class="sidebar-brand d-flex align-items-center gap-2">
+      <div class="p-2 rounded-3" style="background: rgba(255,255,255,0.15);">
+        <i class="bi bi-box-seam-fill fs-4 text-info"></i>
+      </div>
+      <div>
+        <div class="fw-bold fs-5 lh-1">ATSSupply</div>
+        <small class="text-white-50" style="font-size: 0.72rem;">ATS Suite Ecosystem</small>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a class="sidebar-btn" routerLink="dashboard" routerLinkActive="active">
+        <i class="bi bi-grid-1x2-fill"></i> Tablero y Depósito
+      </a>
+      @if (showProduction()) {
+        <a class="sidebar-btn" routerLink="production" routerLinkActive="active">
+          <i class="bi bi-gear-fill"></i> Producción e Insumos
+        </a>
+      }
+      @if (showOrders()) {
+        <a class="sidebar-btn" routerLink="new-order" routerLinkActive="active">
+          <i class="bi bi-plus-circle-fill"></i> Nuevo Pedido (POS)
+        </a>
+      }
+      @if (showDelivery()) {
+        <a class="sidebar-btn" routerLink="delivery" routerLinkActive="active">
+          <i class="bi bi-truck"></i> Carga y Reparto
+        </a>
+      }
+      @if (showCustomers()) {
+        <a class="sidebar-btn" routerLink="customers" routerLinkActive="active">
+          <i class="bi bi-people-fill"></i> Agenda de Clientes
+        </a>
+      }
+    </nav>
+
+    <div class="p-3 border-top border-white border-opacity-10 small text-white-50">
+      <div class="fw-semibold text-white">Alvi Hielo</div>
+      <div>Depósito Central • SSO Activo</div>
+    </div>
+  </aside>
+
+  <!-- ÁREA PRINCIPAL -->
+  <div class="app-main">
+    <!-- Header Móvil (< 768px) -->
+    <header class="mobile-topbar d-flex d-md-none py-2 px-3 align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-box-seam-fill fs-5 text-info"></i>
+        <div>
+          <div class="fw-bold lh-1">ATSSupply</div>
+          <small class="text-white-50" style="font-size: 0.7rem;">Alvi Hielo • Depósito</small>
+        </div>
+      </div>
+      <span class="badge bg-light text-dark fw-semibold">{{ roleLabel() }}</span>
+    </header>
+
+    <!-- Header Tablet / PC (>= 768px) -->
+    <header class="desktop-topbar d-none d-md-flex align-items-center justify-content-between">
+      <div>
+        <h5 class="fw-bold mb-0">Tablero Operativo y Depósito</h5>
+        <small class="text-muted">Compañía: <strong>Alvi Hielo</strong> • Sincronizado con ATS Core</small>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
+          Rol: {{ roleLabel() }}
+        </span>
+      </div>
+    </header>
+
+    <!-- Contenedor de Vistas -->
+    <main class="container-fluid p-3 p-lg-4">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>
+
+<!-- BOTTOM NAV (SOLO CELULAR < 768px) -->
+<nav class="bottom-nav d-md-none">
+  <div class="row g-0 text-center">
+    <div class="col">
+      <a class="nav-btn" routerLink="dashboard" routerLinkActive="active">
+        <i class="bi bi-grid-1x2-fill"></i><span>Depósito</span>
+      </a>
+    </div>
+    @if (showProduction()) {
+      <div class="col">
+        <a class="nav-btn" routerLink="production" routerLinkActive="active">
+          <i class="bi bi-gear-fill"></i><span>Producción</span>
+        </a>
+      </div>
+    }
+    @if (showOrders()) {
+      <div class="col">
+        <a class="nav-btn" routerLink="new-order" routerLinkActive="active">
+          <i class="bi bi-plus-circle-fill text-primary"></i><span>Pedido</span>
+        </a>
+      </div>
+    }
+    @if (showDelivery()) {
+      <div class="col">
+        <a class="nav-btn" routerLink="delivery" routerLinkActive="active">
+          <i class="bi bi-truck"></i><span>Reparto</span>
+        </a>
+      </div>
+    }
+    @if (showCustomers()) {
+      <div class="col">
+        <a class="nav-btn" routerLink="customers" routerLinkActive="active">
+          <i class="bi bi-people-fill"></i><span>Clientes</span>
+        </a>
+      </div>
+    }
+  </div>
+</nav>
