@@ -5,6 +5,32 @@ export const USER_ROUTES: Routes = [
   {
     path: '',
     component: UserLayoutComponent,
-    children: []
+    children: [
+      {
+        path: 'dashboard',
+        loadComponent: () => import('./dashboard/dashboard.component').then((m) => m.DashboardComponent)
+      },
+      {
+        path: 'new-order',
+        loadComponent: () => import('./new-order/new-order.component').then((m) => m.NewOrderComponent)
+      },
+      {
+        path: 'delivery',
+        loadComponent: () => import('./delivery/delivery.component').then((m) => m.DeliveryComponent)
+      },
+      {
+        path: 'production',
+        loadComponent: () => import('./production/production.component').then((m) => m.ProductionComponent)
+      },
+      {
+        path: 'customers',
+        loadComponent: () => import('./customers/customers.component').then((m) => m.CustomersComponent)
+      },
+      {
+        path: '',
+        redirectTo: 'dashboard',
+        pathMatch: 'full'
+      }
+    ]
   }
 ];
