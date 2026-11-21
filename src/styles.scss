@@ -1,1 +1,69 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --ats-primary: #0f4c81;
+  --ats-primary-dark: #093256;
+  --ats-accent: #0ea5e9;
+  --ats-bg: #f1f5f9;
+  --ats-surface: #ffffff;
+  --ats-border: #e2e8f0;
+  --ats-text: #0f172a;
+  --ats-muted: #64748b;
+  --sidebar-width: 250px;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--ats-bg);
+  color: var(--ats-text);
+  margin: 0;
+}
+
+/* Common cards & surfaces */
+.ats-card {
+  background: var(--ats-surface);
+  border: 1px solid var(--ats-border);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.stock-card {
+  border-left: 4px solid var(--ats-accent);
+  &.low-stock {
+    border-left-color: #ef4444;
+    background-color: #fef2f2;
+  }
+}
+
+.badge-pendiente { background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+.badge-debe      { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.badge-pagado    { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.badge-ctacte    { background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+
+.tier-badge {
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  &.tier-A { background: #dbeafe; color: #1e40af; }
+  &.tier-B { background: #f3e8ff; color: #6b21a8; }
+  &.tier-C { background: #f1f5f9; color: #334155; }
+}
+
+.qty-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.qty-input {
+  width: 62px;
+  height: 38px;
+  text-align: center;
+  font-weight: 700;
+  border-radius: 10px;
+  border: 1px solid var(--ats-border);
+}
