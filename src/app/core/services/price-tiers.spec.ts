@@ -1,12 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { PriceTiers } from './price-tiers';
+import { PriceTierService } from './price-tiers';
 
-describe('PriceTiers', () => {
-  let service: PriceTiers;
+describe('PriceTierService', () => {
+  let service: PriceTierService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
-    service = TestBed.inject(PriceTiers);
+    service = TestBed.inject(PriceTierService);
   });
 
   it('should be created', () => {
