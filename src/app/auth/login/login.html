@@ -1,1 +1,95 @@
-<p>login works!</p>
+<div class="login-wrapper">
+  <div class="card login-card shadow-lg border-0 rounded-4">
+    <div class="card-body p-4 p-md-5">
+      <!-- Header / Logo -->
+      <div class="text-center mb-4">
+        <div class="brand-badge mb-2">
+          <i class="bi bi-box-seam-fill me-2"></i>ATS Supply
+        </div>
+        <h2 class="h4 fw-bold text-dark mb-1">Iniciar Sesión</h2>
+        <p class="text-muted small mb-0">Sistema de Gestión & Distribución Multi-Tenant</p>
+      </div>
+
+      <!-- Alerta de Error -->
+      @if (errorMessage()) {
+        <div class="alert alert-danger py-2 small mb-4 d-flex align-items-center" role="alert">
+          <i class="bi bi-exclamation-octagon-fill me-2 fs-5 flex-shrink-0"></i>
+          <div>{{ errorMessage() }}</div>
+        </div>
+      }
+
+      <!-- Formulario -->
+      <form (ngSubmit)="onSubmit()" novalidate>
+        <!-- Usuario / Email -->
+        <div class="mb-3">
+          <label class="form-label small fw-semibold text-secondary">Usuario o Correo Electrónico</label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0 text-muted">
+              <i class="bi bi-person-fill"></i>
+            </span>
+            <input
+              type="text"
+              class="form-control border-start-0 ps-0"
+              placeholder="Ej: admin o tu@empresa.com"
+              [ngModel]="username()"
+              (ngModelChange)="username.set($event)"
+              name="username"
+              autocomplete="username"
+              required
+              [disabled]="isLoading()"
+            />
+          </div>
+        </div>
+
+        <!-- Contraseña -->
+        <div class="mb-4">
+          <label class="form-label small fw-semibold text-secondary">Contraseña</label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0 text-muted">
+              <i class="bi bi-lock-fill"></i>
+            </span>
+            <input
+              [type]="showPassword() ? 'text' : 'password'"
+              class="form-control border-start-0 border-end-0 px-0"
+              placeholder="••••••••"
+              [ngModel]="password()"
+              (ngModelChange)="password.set($event)"
+              name="password"
+              autocomplete="current-password"
+              required
+              [disabled]="isLoading()"
+            />
+            <button
+              type="button"
+              class="input-group-text bg-light border-start-0 text-muted"
+              (click)="togglePasswordVisibility()"
+              tabindex="-1"
+            >
+              <i class="bi" [class.bi-eye]="!showPassword()" [class.bi-eye-slash]="showPassword()"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Botón de Envío -->
+        <button
+          type="submit"
+          class="btn btn-primary w-100 py-2 rounded-pill fw-semibold d-flex justify-content-center align-items-center"
+          [disabled]="isLoading()"
+        >
+          @if (isLoading()) {
+            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            <span>Verificando...</span>
+          } @else {
+            <i class="bi bi-box-arrow-in-right me-2"></i>
+            <span>Ingresar al Sistema</span>
+          }
+        </button>
+      </form>
+    </div>
+
+    <!-- Footer informativo -->
+    <div class="card-footer bg-light border-0 py-3 text-center text-muted small rounded-bottom-4">
+      <i class="bi bi-shield-check me-1 text-success"></i> Conexión protegida con Clean Architecture
+    </div>
+  </div>
+</div>
