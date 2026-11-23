@@ -24,6 +24,7 @@ export interface ProductionBatchLog {
   qty: number;
   waste: number;
   time: string;
+  date?: string;
 }
 
 @Component({
@@ -51,13 +52,8 @@ export class ProductionComponent implements OnInit {
   // Productos terminados fabricables
   readonly products = signal<ProductInterface[]>([]);
 
-  // Inventario de insumos (recetas / BOM)
-  readonly supplies = signal<ProductionSupplyItem[]>([
-    { id: 'sup-2', name: 'Bolsas plásticas vacías 2 kg', productId: '', stock: 600, minStock: 200 },
-    { id: 'sup-3', name: 'Bolsas plásticas vacías 3 kg', productId: '', stock: 850, minStock: 250 },
-    { id: 'sup-5', name: 'Bolsas plásticas vacías 5 kg', productId: '', stock: 420, minStock: 150 },
-    { id: 'sup-15', name: 'Bolsas plásticas vacías 15 kg', productId: '', stock: 140, minStock: 100 }
-  ]);
+  // Inventario de insumos (recetas / BOM) desde la API
+  readonly supplies = signal<ProductionSupplyItem[]>([]);
 
   // Historial de lotes del día
   readonly productionLogs = signal<ProductionBatchLog[]>([]);
@@ -77,15 +73,18 @@ export class ProductionComponent implements OnInit {
     this.machines().find((m) => m.mch_uuid === this.selectedMachineUuid()) ?? this.machines()[0]
   );
 
-  readonly associatedSupply = computed<ProductionSupplyItem | undefined>(() =>
-    this.supplies().find((s) => s.productId === this.selectedProductId()) ?? this.supplies()[0]
-  );
+  readonly associatedSupply = computed<ProductionSupplyItem | undefined>(() => {
+    if (this.supplies().length === 0) return undefined;
+    return this.supplies().find((s) => s.productId === this.selectedProductId()) ?? this.supplies()[0];
+  });
 
   readonly totalConsumedSupplies = computed<number>(
     () => (this.batchQty() || 0) + (this.wasteQty() || 0)
   );
 
   readonly hasEnoughSupplies = computed<boolean>(() => {
+    // Si la empresa aún no registró insumos en su catálogo, no se bloquea la producción
+    if (this.supplies().length === 0) return true;
     const supply = this.associatedSupply();
     if (!supply) return true;
     return this.totalConsumedSupplies() <= supply.stock;
@@ -99,13 +98,25 @@ export class ProductionComponent implements OnInit {
       this.hasEnoughSupplies()
   );
 
-  readonly totalProducedToday = computed<number>(() =>
-    this.productionLogs().reduce((acc, log) => acc + log.qty, 0)
-  );
+  readonly totalProducedToday = computed<number>(() => {
+    const todayStr = new Date().toDateString();
+    return this.productionLogs()
+      .filter((log) => {
+        if (!log.date) return true;
+        return new Date(log.date).toDateString() === todayStr;
+      })
+      .reduce((acc, log) => acc + log.qty, 0);
+  });
 
-  readonly totalWasteToday = computed<number>(() =>
-    this.productionLogs().reduce((acc, log) => acc + log.waste, 0)
-  );
+  readonly totalWasteToday = computed<number>(() => {
+    const todayStr = new Date().toDateString();
+    return this.productionLogs()
+      .filter((log) => {
+        if (!log.date) return true;
+        return new Date(log.date).toDateString() === todayStr;
+      })
+      .reduce((acc, log) => acc + log.waste, 0);
+  });
 
   public ngOnInit(): void {
     this.loadProductionData();
@@ -136,20 +147,41 @@ export class ProductionComponent implements OnInit {
       next: (res) => {
         const list: ProductInterface[] = Array.isArray(res) ? res : res?.data || [];
         const finishedGoods = list.filter((p) => p.prd_type !== 'SUPPLY' && p.prd_active !== false);
+        const supplyGoods = list.filter((p) => p.prd_type === 'SUPPLY' && p.prd_active !== false);
+
         this.products.set(finishedGoods);
 
-        if (finishedGoods.length > 0) {
-          if (!this.selectedProductId()) {
-            this.selectedProductId.set(finishedGoods[0].prd_uuid);
-          }
-          // Vincular insumos con productos por índice / nombre si aún no están vinculados
-          this.supplies.update((currSupplies) =>
-            currSupplies.map((sup, idx) => ({
-              ...sup,
-              productId: finishedGoods[idx]?.prd_uuid || sup.productId
-            }))
-          );
+        if (finishedGoods.length > 0 && !this.selectedProductId()) {
+          this.selectedProductId.set(finishedGoods[0].prd_uuid);
         }
+
+        // Mapear materias primas reales desde la base de datos
+        const mappedSupplies: ProductionSupplyItem[] = supplyGoods.map((sup) => {
+          // Intentar asociar con un producto terminado por coincidencia de peso/capacidad o nombre
+          const matchWeight = sup.prd_name.match(/\b(\d+(?:\.\d+)?)\s*(?:kg|kilos?|g|lt|litros?)\b/i);
+          let linkedProductId = '';
+          if (matchWeight) {
+            const weightVal = matchWeight[1];
+            const matchedProduct = finishedGoods.find((fg) => {
+              const fgMatch = fg.prd_name.match(new RegExp(`\\b${weightVal}\\s*(?:kg|kilos?|g|lt|litros?)\\b`, 'i'));
+              const fgWeight = fg.prd_weightorvolume !== null && fg.prd_weightorvolume !== undefined ? String(fg.prd_weightorvolume) : null;
+              return !!fgMatch || fgWeight === weightVal;
+            });
+            if (matchedProduct) {
+              linkedProductId = matchedProduct.prd_uuid;
+            }
+          }
+
+          return {
+            id: sup.prd_uuid,
+            name: sup.prd_name,
+            productId: linkedProductId,
+            stock: Number(sup.prd_currentstock) || 0,
+            minStock: Number(sup.prd_minstockalert) || 0
+          };
+        });
+
+        this.supplies.set(mappedSupplies);
         this.isLoading.set(false);
       },
       error: (err) => {
@@ -164,9 +196,8 @@ export class ProductionComponent implements OnInit {
       next: (res) => {
         const list: ProductionOrderInterface[] = Array.isArray(res) ? res : res?.data || [];
         const mappedLogs: ProductionBatchLog[] = list.map((order) => {
-          const orderDate = order.prdord_productiondate
-            ? new Date(order.prdord_productiondate)
-            : new Date();
+          const rawDate = order.prdord_productiondate || order.prdord_createdat;
+          const orderDate = rawDate ? new Date(rawDate) : new Date();
           const time = `${String(orderDate.getHours()).padStart(2, '0')}:${String(orderDate.getMinutes()).padStart(2, '0')}`;
           const machine = this.machines().find((m) => m.mch_uuid === order.mch_uuid)?.mch_name || 'Línea de Envasado';
           const product = this.products().find((p) => p.prd_uuid === order.prd_uuid)?.prd_name || 'Bolsa de Hielo';
@@ -177,7 +208,8 @@ export class ProductionComponent implements OnInit {
             productName: product,
             qty: Number(order.prdord_producedqty) || 0,
             waste: Number(order.prdord_wasteqty) || 0,
-            time
+            time,
+            date: orderDate.toISOString()
           };
         });
         this.productionLogs.set(mappedLogs);
@@ -229,14 +261,17 @@ export class ProductionComponent implements OnInit {
           )
         );
 
-        // 2. Descontar insumos utilizados
-        this.supplies.update((list) =>
-          list.map((s) =>
-            s.productId === prd.prd_uuid
-              ? { ...s, stock: Math.max(0, s.stock - consumed) }
-              : s
-          )
-        );
+        // 2. Descontar insumos utilizados si hay coincidencia
+        const supplyToDeduct = this.associatedSupply();
+        if (supplyToDeduct) {
+          this.supplies.update((list) =>
+            list.map((s) =>
+              s.id === supplyToDeduct.id
+                ? { ...s, stock: Math.max(0, s.stock - consumed) }
+                : s
+            )
+          );
+        }
 
         // 3. Registrar en historial de producción
         const now = new Date();
@@ -247,7 +282,8 @@ export class ProductionComponent implements OnInit {
           productName: prd.prd_name,
           qty,
           waste,
-          time
+          time,
+          date: now.toISOString()
         };
         this.productionLogs.update((list) => [newLog, ...list]);
 

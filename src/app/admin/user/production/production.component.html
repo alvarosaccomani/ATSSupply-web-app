@@ -166,6 +166,11 @@
               {{ sup.stock }} unid.
             </span>
           </div>
+        } @empty {
+          <div class="text-center text-muted py-3 small bg-light rounded-3 border">
+            <i class="bi bi-box-seam fs-4 d-block mb-1 text-secondary"></i>
+            Sin materias primas registradas en el catálogo de productos.
+          </div>
         }
       </div>
 
