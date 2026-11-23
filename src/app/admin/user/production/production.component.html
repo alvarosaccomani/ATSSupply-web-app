@@ -1,4 +1,197 @@
-<div class="ats-card p-4 text-center text-muted">
-  <i class="bi bi-gear-fill fs-1 text-primary d-block mb-2"></i>
-  <p class="mb-0 fw-semibold">Producción en Planta e Insumos</p>
+<div class="row g-4 mb-4">
+  <!-- Columna 1: Registro de Lote de Producción -->
+  <div class="col-12 col-lg-6">
+    <div class="ats-card p-3 p-lg-4">
+      <h6 class="fw-bold mb-3 text-primary">
+        <i class="bi bi-plus-circle-fill me-1"></i>Registrar Parte de Producción
+      </h6>
+
+      @if (batchSuccessMessage()) {
+        <div class="alert alert-success alert-dismissible fade show small py-2 mb-3" role="alert">
+          <i class="bi bi-check-circle-fill me-1"></i>
+          {{ batchSuccessMessage() }}
+          <button
+            type="button"
+            class="btn-close py-2"
+            aria-label="Cerrar"
+            (click)="batchSuccessMessage.set(null)"
+          ></button>
+        </div>
+      }
+
+      <div class="row g-3 mb-3">
+        <!-- Máquina / Línea -->
+        <div class="col-6">
+          <label for="prodMachineSelect" class="form-label small fw-semibold">Máquina / Línea</label>
+          <select
+            id="prodMachineSelect"
+            class="form-select"
+            [ngModel]="selectedMachine()"
+            (ngModelChange)="selectedMachine.set($event)"
+          >
+            @for (machine of machines(); track machine) {
+              <option [value]="machine">{{ machine }}</option>
+            }
+          </select>
+        </div>
+
+        <!-- Producto Terminado -->
+        <div class="col-6">
+          <label for="prodProductSelect" class="form-label small fw-semibold">Producto Terminado</label>
+          <select
+            id="prodProductSelect"
+            class="form-select"
+            [ngModel]="selectedProductId()"
+            (ngModelChange)="selectedProductId.set($event)"
+          >
+            @for (prod of products(); track prod.id) {
+              <option [value]="prod.id">
+                {{ prod.name }} (Stock: {{ prod.stock }} u.)
+              </option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <!-- Cantidad Producida -->
+        <div class="col-6">
+          <label for="prodQtyInput" class="form-label small fw-semibold">Cantidad Neta (u.)</label>
+          <input
+            type="number"
+            id="prodQtyInput"
+            class="form-control"
+            min="1"
+            [ngModel]="batchQty()"
+            (ngModelChange)="batchQty.set($event)"
+          />
+        </div>
+
+        <!-- Merma / Descarte -->
+        <div class="col-6">
+          <label for="prodWasteInput" class="form-label small fw-semibold">Merma / Bolsas Rotas</label>
+          <input
+            type="number"
+            id="prodWasteInput"
+            class="form-control"
+            min="0"
+            [ngModel]="wasteQty()"
+            (ngModelChange)="wasteQty.set($event)"
+          />
+        </div>
+      </div>
+
+      <!-- Cálculo previsto de consumo de insumos (BOM) -->
+      @if (associatedSupply(); as supply) {
+        <div class="p-2 px-3 bg-light rounded-3 small mb-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted">
+              <i class="bi bi-box me-1"></i>Insumo requerido:
+              <strong class="text-dark">{{ supply.name }}</strong>
+            </span>
+            <span class="fw-semibold text-primary">
+              Consumo: {{ totalConsumedSupplies() }} u.
+            </span>
+          </div>
+          <div class="text-muted mt-1" style="font-size: 0.72rem;">
+            Disponible en depósito: <strong>{{ supply.stock }} u.</strong>
+          </div>
+        </div>
+      }
+
+      @if (!hasEnoughSupplies()) {
+        <div class="alert alert-danger py-2 small mb-3">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          Stock insuficiente del insumo para cubrir la tirada prevista (se requieren {{ totalConsumedSupplies() }} u.).
+        </div>
+      }
+
+      <button
+        type="button"
+        class="btn btn-primary w-100 py-2 fw-semibold"
+        [disabled]="!canSubmitBatch()"
+        (click)="submitProductionOrder()"
+      >
+        <i class="bi bi-check2-circle me-1"></i>Cerrar Lote y Sumar a Depósito
+      </button>
+    </div>
+  </div>
+
+  <!-- Columna 2: Inventario de Insumos (Bolsas Vacías) -->
+  <div class="col-12 col-lg-6">
+    <div class="ats-card p-3 p-lg-4 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold mb-0">Inventario de Insumos (Bolsas Vacías)</h6>
+        <span class="badge bg-light text-secondary border">Materia Prima</span>
+      </div>
+
+      <div class="d-flex flex-column gap-2 mb-3">
+        @for (sup of supplies(); track sup.id) {
+          <div
+            class="d-flex justify-content-between align-items-center p-2 px-3 rounded-3 border"
+            [class.bg-danger-subtle]="sup.stock <= sup.minStock"
+            [class.bg-light]="sup.stock > sup.minStock"
+          >
+            <div>
+              <span class="small fw-semibold text-dark">{{ sup.name }}</span>
+              @if (sup.stock <= sup.minStock) {
+                <span class="badge bg-danger ms-2" style="font-size: 0.65rem;">Stock Crítico</span>
+              }
+            </div>
+            <span
+              class="badge fs-6"
+              [class.bg-danger]="sup.stock <= sup.minStock"
+              [class.bg-secondary]="sup.stock > sup.minStock"
+            >
+              {{ sup.stock }} unid.
+            </span>
+          </div>
+        }
+      </div>
+
+      <div class="p-3 bg-light rounded-3 small mt-auto">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted">Total fabricado en la jornada:</span>
+          <span class="fw-bold text-success fs-6">{{ totalProducedToday() }} bolsas</span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="text-muted">Descarte / merma acumulada:</span>
+          <span class="fw-bold text-danger">{{ totalWasteToday() }} u.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sección Inferior: Historial de Lotes Producidos Hoy -->
+<div class="ats-card p-3 p-lg-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="fw-bold mb-0 text-uppercase text-muted" style="font-size: 0.8rem;">
+      <i class="bi bi-clock-history me-1 text-primary"></i>Últimos Lotes Fabricados en la Jornada
+    </h6>
+    <span class="badge bg-light text-dark border">{{ productionLogs().length }} partes</span>
+  </div>
+
+  <div class="row g-3">
+    @for (log of productionLogs(); track log.id) {
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="p-3 border rounded-3 bg-light d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold small text-dark">
+              {{ log.productName }}
+              <span class="text-success fw-bold">(+{{ log.qty }} u.)</span>
+            </div>
+            <small class="text-muted d-block" style="font-size: 0.74rem;">
+              {{ log.machine }} • Merma: {{ log.waste }} u.
+            </small>
+          </div>
+          <span class="badge bg-white text-dark border px-2 py-1">{{ log.time }} hs</span>
+        </div>
+      </div>
+    } @empty {
+      <div class="col-12 text-center text-muted py-3">
+        <small>No se han registrado tiradas de fabricación en la jornada actual.</small>
+      </div>
+    }
+  </div>
 </div>
