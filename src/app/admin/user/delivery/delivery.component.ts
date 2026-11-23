@@ -12,6 +12,8 @@ export interface DeliveryOrderItem {
   customerName: string;
   address: string;
   phone?: string;
+  lat?: number | null;
+  lng?: number | null;
   detailSummary: string;
   notes?: string;
   total: number;
@@ -142,6 +144,8 @@ export class DeliveryComponent implements OnInit {
               customerName: (ord as any).customer?.cus_name || 'Cliente sin nombre',
               address: (ord as any).customer?.cus_address || 'Sin dirección',
               phone: (ord as any).customer?.cus_phone || '',
+              lat: (ord as any).customer?.cus_lat ? Number((ord as any).customer.cus_lat) : null,
+              lng: (ord as any).customer?.cus_lng ? Number((ord as any).customer.cus_lng) : null,
               detailSummary: summaryParts.join(', ') || 'Sin detalle de ítems',
               notes: ord.ord_notes || '',
               total: Number(ord.ord_totalamount) || 0,
@@ -204,8 +208,12 @@ export class DeliveryComponent implements OnInit {
       });
   }
 
-  public openNavigationMap(address: string): void {
-    const encoded = encodeURIComponent(address);
+  public openNavigationMap(order: DeliveryOrderItem): void {
+    if (order.lat && order.lng) {
+      window.open(`https://www.google.com/maps/search/?api=1&query=${order.lat},${order.lng}`, '_blank');
+      return;
+    }
+    const encoded = encodeURIComponent(order.address);
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, '_blank');
   }
 

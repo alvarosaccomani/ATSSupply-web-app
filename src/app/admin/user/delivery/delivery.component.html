@@ -92,10 +92,13 @@
                   <button
                     type="button"
                     class="btn btn-link btn-sm p-0 text-decoration-none"
-                    title="Abrir en Google Maps"
-                    (click)="openNavigationMap(order.address)"
+                    [title]="order.lat && order.lng ? 'Navegar por GPS exacto' : 'Abrir en Google Maps'"
+                    (click)="openNavigationMap(order)"
                   >
                     <i class="bi bi-map-fill text-primary"></i> GPS
+                    @if (order.lat && order.lng) {
+                      <span class="badge bg-success text-white ms-1 small" style="font-size: 0.65rem;">GPS</span>
+                    }
                   </button>
                 </div>
 
