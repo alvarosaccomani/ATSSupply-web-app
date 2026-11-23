@@ -1,7 +1,13 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { CustomerService } from '@services/customers';
+import { ProductService } from '@services/products';
+import { OrderService } from '@services/orders';
+import { CompanyContextService } from '@services/company-context';
+import { AuthService } from '@services/auth';
+import { OrderCreateInput, OrderStatus } from '@interfaces/order';
 
 export type PriceTierCode = 'A' | 'B' | 'C';
 
@@ -35,39 +41,28 @@ export interface CartItem {
   templateUrl: './new-order.component.html',
   styleUrl: './new-order.component.scss'
 })
-export class NewOrderComponent {
+export class NewOrderComponent implements OnInit {
   private readonly _router = inject(Router);
+  private readonly _customerService = inject(CustomerService);
+  private readonly _productService = inject(ProductService);
+  private readonly _orderService = inject(OrderService);
+  private readonly _companyContext = inject(CompanyContextService);
+  private readonly _authService = inject(AuthService);
+
+  // Estado de carga y feedback
+  readonly isLoading = signal<boolean>(false);
+  readonly isSubmitting = signal<boolean>(false);
+  readonly errorMessage = signal<string | null>(null);
 
   // Clientes cargados para POS
-  readonly customers = signal<PosCustomer[]>([
-    { id: 'cus-1', name: 'DISTRIBUIDORA ERRAMUSPE', tier: 'A', address: 'Ruta 7 Km 68', phone: '2323551100' },
-    { id: 'cus-2', name: 'KITA', tier: 'A', address: 'Av. Constitución 1240', phone: '2323552200' },
-    { id: 'cus-3', name: 'LA MATERA', tier: 'A', address: 'San Martín 450', phone: '' },
-    { id: 'cus-4', name: 'DONBLU', tier: 'A', address: 'Acceso Oeste Colectora', phone: '' },
-    { id: 'cus-5', name: 'ARRUS', tier: 'B', address: 'Mitre 890', phone: '' },
-    { id: 'cus-6', name: 'CANCHA ATENEO', tier: 'B', address: 'Pellegrini y Francia', phone: '' },
-    { id: 'cus-7', name: 'PARRILLA KAPI', tier: 'B', address: 'Humberto 2130', phone: '' },
-    { id: 'cus-8', name: 'DESPENSA DAMIAN', tier: 'C', address: 'Roma y Vélez Sarsfield', phone: '' },
-    { id: 'cus-9', name: 'DESPENSA MARU', tier: 'C', address: 'Alsina 1120', phone: '' }
-  ]);
-
-  readonly selectedCustomerId = signal<string>('cus-1');
+  readonly customers = signal<PosCustomer[]>([]);
+  readonly selectedCustomerId = signal<string>('');
 
   // Catálogo de Productos con Matriz de Precios
-  readonly products = signal<PosProduct[]>([
-    { id: 'prd-2', name: 'Bolsa 2 kg', stock: 180, prices: { A: 2000, B: 2500, C: 3000 } },
-    { id: 'prd-3', name: 'Bolsa 3 kg', stock: 240, prices: { A: 3000, B: 3500, C: 4000 } },
-    { id: 'prd-5', name: 'Bolsa 5 kg', stock: 95, prices: { A: 5000, B: 5500, C: 6000 } },
-    { id: 'prd-15', name: 'Bolsa 15 kg', stock: 35, prices: { A: 15000, B: 16000, C: 17000 } }
-  ]);
+  readonly products = signal<PosProduct[]>([]);
 
   // Cantidades ingresadas en el borrador
-  readonly draftQuantities = signal<Record<string, number>>({
-    'prd-2': 0,
-    'prd-3': 0,
-    'prd-5': 0,
-    'prd-15': 0
-  });
+  readonly draftQuantities = signal<Record<string, number>>({});
 
   readonly orderStatus = signal<string>('PENDIENTE DE ENTREGA');
   readonly orderNotes = signal<string>('');
@@ -80,7 +75,7 @@ export class NewOrderComponent {
   readonly newCustomerTier = signal<PriceTierCode>('C');
 
   // Computed Signals
-  readonly selectedCustomer = computed<PosCustomer>(() => {
+  readonly selectedCustomer = computed<PosCustomer | undefined>(() => {
     const id = this.selectedCustomerId();
     return this.customers().find((c) => c.id === id) ?? this.customers()[0];
   });
@@ -121,8 +116,98 @@ export class NewOrderComponent {
   });
 
   readonly canSubmit = computed<boolean>(
-    () => this.totalBags() > 0 && !this.isStockExceeded()
+    () =>
+      this.totalBags() > 0 &&
+      !this.isStockExceeded() &&
+      !!this.selectedCustomerId() &&
+      !this.isSubmitting()
   );
+
+  constructor() {
+    // Reaccionar ante cambios de compañía activa
+    effect(() => {
+      const comp = this._companyContext.activeCompany();
+      if (comp?.cmp_uuid) {
+        this.loadInitialData();
+      }
+    });
+  }
+
+  public ngOnInit(): void {
+    this.loadInitialData();
+  }
+
+  public loadInitialData(): void {
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (!cmp_uuid) {
+      return;
+    }
+
+    this.isLoading.set(true);
+    this.errorMessage.set(null);
+
+    // Cargar Clientes
+    this._customerService.getCustomers(cmp_uuid).subscribe({
+      next: (res) => {
+        if (res?.data && Array.isArray(res.data)) {
+          const mappedCustomers: PosCustomer[] = res.data.map((c) => ({
+            id: c.cus_uuid,
+            name: c.cus_name,
+            tier: 'C',
+            address: c.cus_address || '',
+            phone: c.cus_phone || ''
+          }));
+          this.customers.set(mappedCustomers);
+          if (mappedCustomers.length > 0 && !this.selectedCustomerId()) {
+            this.selectedCustomerId.set(mappedCustomers[0].id);
+          }
+        }
+      },
+      error: (err) => {
+        console.warn('Error al cargar clientes para POS:', err);
+      }
+    });
+
+    // Cargar Productos con Precios
+    this._productService.getProducts(cmp_uuid).subscribe({
+      next: (res) => {
+        this.isLoading.set(false);
+        if (res?.data && Array.isArray(res.data)) {
+          const mappedProducts: PosProduct[] = res.data.map((p) => {
+            const priceMap: Record<PriceTierCode, number> = { A: 0, B: 0, C: 0 };
+            if (p.prices && Array.isArray(p.prices)) {
+              for (const pr of p.prices) {
+                const code = (pr.priceTier?.prct_code || 'C').toUpperCase() as PriceTierCode;
+                if (code === 'A' || code === 'B' || code === 'C') {
+                  priceMap[code] = Number(pr.prdprc_price) || 0;
+                }
+              }
+            }
+            return {
+              id: p.prd_uuid,
+              name: p.prd_name,
+              stock: Number(p.prd_currentstock) || 0,
+              prices: priceMap
+            };
+          });
+
+          this.products.set(mappedProducts);
+
+          // Inicializar borrador
+          const initialDraft: Record<string, number> = {};
+          for (const prod of mappedProducts) {
+            initialDraft[prod.id] = 0;
+          }
+          this.draftQuantities.set(initialDraft);
+        }
+      },
+      error: (err) => {
+        this.isLoading.set(false);
+        this.errorMessage.set('No se pudo cargar el catálogo de productos.');
+        console.warn('Error al cargar productos para POS:', err);
+      }
+    });
+  }
 
   public updateQuantity(productId: string, delta: number): void {
     this.draftQuantities.update((curr) => {
@@ -150,26 +235,50 @@ export class NewOrderComponent {
       return;
     }
 
-    // Descontar stock localmente en los productos
-    const quantities = this.draftQuantities();
-    this.products.update((list) =>
-      list.map((p) => ({
-        ...p,
-        stock: Math.max(0, p.stock - (quantities[p.id] || 0))
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    const seller_uuid = this._authService.currentUser()?.usr_uuid;
+    const cus_uuid = this.selectedCustomerId();
+
+    if (!cmp_uuid || !cus_uuid || !seller_uuid) {
+      this.errorMessage.set('Datos incompletos para registrar el pedido.');
+      return;
+    }
+
+    this.isSubmitting.set(true);
+    this.errorMessage.set(null);
+
+    // Mapeo de estado a convención del backend
+    const rawStatus = this.orderStatus();
+    let backendStatus: OrderStatus = 'PENDIENTE_DE_ENTREGA';
+    if (rawStatus === 'PAGADO') backendStatus = 'PAGADO';
+    if (rawStatus === 'ENTREGADO DEBE') backendStatus = 'ENTREGADO_DEBE';
+    if (rawStatus === 'CUENTA CORRIENTE') backendStatus = 'CUENTA_CORRIENTE';
+
+    const orderPayload: OrderCreateInput = {
+      cmp_uuid,
+      cus_uuid,
+      usr_uuid_seller: seller_uuid,
+      ord_notes: this.orderNotes().trim() || null,
+      ord_status: backendStatus,
+      details: this.cartItems().map((item) => ({
+        prd_uuid: item.productId,
+        ordd_quantity: item.quantity,
+        ordd_unitprice: item.unitPrice,
+        ordd_subtotal: item.subtotal
       }))
-    );
+    };
 
-    // Resetear formulario
-    this.draftQuantities.set({
-      'prd-2': 0,
-      'prd-3': 0,
-      'prd-5': 0,
-      'prd-15': 0
+    this._orderService.saveOrder(orderPayload).subscribe({
+      next: () => {
+        this.isSubmitting.set(false);
+        this._router.navigate(['/admin/user/dashboard']);
+      },
+      error: (err) => {
+        this.isSubmitting.set(false);
+        const msg = err.error?.message || 'Error al persistir el pedido en el servidor.';
+        this.errorMessage.set(msg);
+      }
     });
-    this.orderNotes.set('');
-
-    // Redireccionar al dashboard
-    this._router.navigate(['/admin/user/dashboard']);
   }
 
   public openQuickCustomerModal(): void {
@@ -188,8 +297,12 @@ export class NewOrderComponent {
     const name = this.newCustomerName().trim();
     if (!name) return;
 
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (!cmp_uuid) return;
+
+    const tempId = 'cus-' + Date.now();
     const newCus: PosCustomer = {
-      id: 'cus-' + Date.now(),
+      id: tempId,
       name: name.toUpperCase(),
       address: this.newCustomerAddress().trim(),
       phone: this.newCustomerPhone().trim(),
@@ -199,6 +312,29 @@ export class NewOrderComponent {
     this.customers.update((list) => [newCus, ...list]);
     this.selectedCustomerId.set(newCus.id);
     this.closeQuickCustomerModal();
+
+    // Persistir cliente en backend
+    this._customerService
+      .saveCustomer({
+        cmp_uuid,
+        cus_name: newCus.name,
+        cus_address: newCus.address,
+        cus_phone: newCus.phone,
+        cus_active: true
+      })
+      .subscribe({
+        next: (res) => {
+          if (res?.data?.cus_uuid) {
+            this.customers.update((list) =>
+              list.map((c) => (c.id === tempId ? { ...c, id: res.data.cus_uuid } : c))
+            );
+            if (this.selectedCustomerId() === tempId) {
+              this.selectedCustomerId.set(res.data.cus_uuid);
+            }
+          }
+        },
+        error: (err) => console.warn('Error al persistir cliente rápido:', err)
+      });
   }
 
   public formatMoney(amount: number): string {
