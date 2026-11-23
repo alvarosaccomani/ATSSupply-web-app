@@ -16,6 +16,8 @@ export interface CustomerViewItem {
   tier: CustomerTierCode;
   address: string;
   phone: string;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 @Component({
@@ -48,6 +50,9 @@ export class CustomersComponent implements OnInit {
   readonly newCustomerAddress = signal<string>('');
   readonly newCustomerPhone = signal<string>('');
   readonly newCustomerTier = signal<CustomerTierCode>('C');
+  readonly newCustomerLat = signal<number | null>(null);
+  readonly newCustomerLng = signal<number | null>(null);
+  readonly isLocating = signal<boolean>(false);
 
   // Computed Signals
   readonly filteredCustomers = computed<CustomerViewItem[]>(() => {
@@ -127,7 +132,9 @@ export class CustomersComponent implements OnInit {
               name: c.cus_name,
               tier: tierCode,
               address: c.cus_address || '',
-              phone: c.cus_phone || ''
+              phone: c.cus_phone || '',
+              lat: c.cus_lat !== undefined && c.cus_lat !== null ? Number(c.cus_lat) : null,
+              lng: c.cus_lng !== undefined && c.cus_lng !== null ? Number(c.cus_lng) : null
             };
           });
           this.customers.set(mapped);
@@ -146,14 +153,58 @@ export class CustomersComponent implements OnInit {
     return `https://wa.me/549${clean}`;
   }
 
+  public getGoogleMapsUrl(customer: CustomerViewItem): string {
+    if (customer.lat && customer.lng) {
+      return `https://www.google.com/maps/search/?api=1&query=${customer.lat},${customer.lng}`;
+    }
+    const cleanAddress = encodeURIComponent(customer.address);
+    return `https://www.google.com/maps/search/?api=1&query=${cleanAddress}`;
+  }
+
+  public getCurrentLocation(): void {
+    if (!navigator.geolocation) {
+      this.modalErrorMessage.set('La geolocalización no está soportada por este dispositivo.');
+      return;
+    }
+
+    this.isLocating.set(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        this.isLocating.set(false);
+        this.newCustomerLat.set(Number(position.coords.latitude.toFixed(6)));
+        this.newCustomerLng.set(Number(position.coords.longitude.toFixed(6)));
+      },
+      (error) => {
+        this.isLocating.set(false);
+        let errorMsg = 'No se pudo obtener la ubicación GPS.';
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMsg = 'Permiso denegado para acceder a la ubicación. Habilitalo en el navegador.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          errorMsg = 'La señal de GPS no está disponible en este momento.';
+        } else if (error.code === error.TIMEOUT) {
+          errorMsg = 'Se agotó el tiempo de espera para obtener la ubicación GPS.';
+        }
+        this.modalErrorMessage.set(errorMsg);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  }
+
   public openQuickCustomerModal(): void {
     this.editingCustomerId.set(null);
     this.newCustomerName.set('');
     this.newCustomerAddress.set('');
     this.newCustomerPhone.set('');
     this.newCustomerTier.set('C');
+    this.newCustomerLat.set(null);
+    this.newCustomerLng.set(null);
     this.modalErrorMessage.set(null);
     this.isSaving.set(false);
+    this.isLocating.set(false);
     this.showQuickCustomerModal.set(true);
   }
 
@@ -163,8 +214,11 @@ export class CustomersComponent implements OnInit {
     this.newCustomerAddress.set(customer.address);
     this.newCustomerPhone.set(customer.phone);
     this.newCustomerTier.set(customer.tier);
+    this.newCustomerLat.set(customer.lat ?? null);
+    this.newCustomerLng.set(customer.lng ?? null);
     this.modalErrorMessage.set(null);
     this.isSaving.set(false);
+    this.isLocating.set(false);
     this.showQuickCustomerModal.set(true);
   }
 
@@ -172,8 +226,11 @@ export class CustomersComponent implements OnInit {
     if (this.isSaving()) return;
     this.showQuickCustomerModal.set(false);
     this.editingCustomerId.set(null);
+    this.newCustomerLat.set(null);
+    this.newCustomerLng.set(null);
     this.modalErrorMessage.set(null);
     this.isSaving.set(false);
+    this.isLocating.set(false);
   }
 
   public saveQuickCustomer(): void {
@@ -211,6 +268,8 @@ export class CustomersComponent implements OnInit {
       cus_name: name.toUpperCase(),
       cus_address: address,
       cus_phone: this.newCustomerPhone().trim(),
+      cus_lat: this.newCustomerLat(),
+      cus_lng: this.newCustomerLng(),
       cus_active: true
     };
 
