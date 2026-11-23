@@ -1,7 +1,9 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { CustomerService } from '@services/customers';
+import { CompanyContextService } from '@services/company-context';
 
 export type CustomerTierCode = 'A' | 'B' | 'C';
 
@@ -20,19 +22,14 @@ export interface CustomerViewItem {
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.scss'
 })
-export class CustomersComponent {
-  // Lista de clientes
-  readonly customers = signal<CustomerViewItem[]>([
-    { id: 'cus-1', name: 'DISTRIBUIDORA ERRAMUSPE', tier: 'A', address: 'Ruta 7 Km 68', phone: '2323551100' },
-    { id: 'cus-2', name: 'KITA', tier: 'A', address: 'Av. Constitución 1240', phone: '2323552200' },
-    { id: 'cus-3', name: 'LA MATERA', tier: 'A', address: 'San Martín 450', phone: '' },
-    { id: 'cus-4', name: 'DONBLU', tier: 'A', address: 'Acceso Oeste Colectora', phone: '' },
-    { id: 'cus-5', name: 'ARRUS', tier: 'B', address: 'Mitre 890', phone: '' },
-    { id: 'cus-6', name: 'CANCHA ATENEO', tier: 'B', address: 'Pellegrini y Francia', phone: '' },
-    { id: 'cus-7', name: 'PARRILLA KAPI', tier: 'B', address: 'Humberto 2130', phone: '' },
-    { id: 'cus-8', name: 'DESPENSA DAMIAN', tier: 'C', address: 'Roma y Vélez Sarsfield', phone: '' },
-    { id: 'cus-9', name: 'DESPENSA MARU', tier: 'C', address: 'Alsina 1120', phone: '' }
-  ]);
+export class CustomersComponent implements OnInit {
+  private readonly _customerService = inject(CustomerService);
+  private readonly _companyContext = inject(CompanyContextService);
+
+  // Lista de clientes conectada a la API
+  readonly customers = signal<CustomerViewItem[]>([]);
+  readonly isLoading = signal<boolean>(false);
+  readonly errorMessage = signal<string | null>(null);
 
   readonly searchQuery = signal<string>('');
 
@@ -65,6 +62,51 @@ export class CustomersComponent {
     };
   });
 
+  constructor() {
+    // Reaccionar automáticamente ante cambios de compañía activa
+    effect(() => {
+      const comp = this._companyContext.activeCompany();
+      if (comp?.cmp_uuid) {
+        this.loadCustomers();
+      }
+    });
+  }
+
+  public ngOnInit(): void {
+    this.loadCustomers();
+  }
+
+  public loadCustomers(): void {
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (!cmp_uuid) {
+      return;
+    }
+
+    this.isLoading.set(true);
+    this.errorMessage.set(null);
+
+    this._customerService.getCustomers(cmp_uuid).subscribe({
+      next: (res) => {
+        this.isLoading.set(false);
+        if (res?.data && Array.isArray(res.data)) {
+          const mapped: CustomerViewItem[] = res.data.map((c) => ({
+            id: c.cus_uuid,
+            name: c.cus_name,
+            tier: 'C',
+            address: c.cus_address || '',
+            phone: c.cus_phone || ''
+          }));
+          this.customers.set(mapped);
+        }
+      },
+      error: (err) => {
+        this.isLoading.set(false);
+        this.errorMessage.set('No se pudo conectar al servidor para cargar los clientes.');
+        console.warn('Error al cargar clientes desde API:', err);
+      }
+    });
+  }
+
   public getWhatsAppUrl(phone: string): string {
     const clean = phone.replace(/\D/g, '');
     return `https://wa.me/549${clean}`;
@@ -86,15 +128,45 @@ export class CustomersComponent {
     const name = this.newCustomerName().trim();
     if (!name) return;
 
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (!cmp_uuid) {
+      this.errorMessage.set('No hay una empresa activa seleccionada para registrar clientes.');
+      return;
+    }
+
+    const tempId = 'cus-' + Date.now();
     const newCus: CustomerViewItem = {
-      id: 'cus-' + Date.now(),
+      id: tempId,
       name: name.toUpperCase(),
       address: this.newCustomerAddress().trim(),
       phone: this.newCustomerPhone().trim(),
       tier: this.newCustomerTier()
     };
 
+    // Actualización optimista en memoria
     this.customers.update((list) => [newCus, ...list]);
     this.closeQuickCustomerModal();
+
+    // Persistencia HTTP real en PostgreSQL
+    this._customerService
+      .saveCustomer({
+        cmp_uuid,
+        cus_name: newCus.name,
+        cus_address: newCus.address,
+        cus_phone: newCus.phone,
+        cus_active: true
+      })
+      .subscribe({
+        next: (res) => {
+          if (res?.data?.cus_uuid) {
+            this.customers.update((list) =>
+              list.map((c) => (c.id === tempId ? { ...c, id: res.data.cus_uuid } : c))
+            );
+          }
+        },
+        error: (err) => {
+          console.warn('Error al persistir cliente en backend:', err);
+        }
+      });
   }
 }
