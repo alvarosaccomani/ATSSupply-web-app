@@ -1,4 +1,269 @@
-<div class="ats-card p-4 text-center text-muted">
-  <i class="bi bi-plus-circle-fill fs-1 text-primary d-block mb-2"></i>
-  <p class="mb-0 fw-semibold">Punto de Venta (POS) y Carga de Pedidos</p>
+<div class="row g-4">
+  <!-- Columna Izquierda: Cliente y Selección de Productos -->
+  <div class="col-12 col-lg-7">
+    <!-- Paso 1: Selección de Cliente -->
+    <div class="ats-card p-3 p-lg-4 mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <label class="fw-bold mb-0">1. Seleccionar Cliente</label>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-primary rounded-pill"
+          (click)="openQuickCustomerModal()"
+        >
+          <i class="bi bi-person-plus-fill me-1"></i>Cliente nuevo rápido
+        </button>
+      </div>
+
+      <select
+        id="orderCustomerSelect"
+        class="form-select"
+        [ngModel]="selectedCustomerId()"
+        (ngModelChange)="onCustomerChange($event)"
+      >
+        @for (cus of customers(); track cus.id) {
+          <option [value]="cus.id">
+            {{ cus.name }} (Cat {{ cus.tier }})
+          </option>
+        }
+      </select>
+
+      @if (selectedCustomer()) {
+        <div class="mt-2 small text-muted d-flex flex-wrap align-items-center gap-3">
+          <span>
+            <i class="bi bi-geo-alt-fill text-primary me-1"></i>
+            {{ selectedCustomer().address || 'Sin dirección registrada' }}
+          </span>
+          @if (selectedCustomer().phone) {
+            <span>
+              <i class="bi bi-telephone-fill text-success me-1"></i>
+              {{ selectedCustomer().phone }}
+            </span>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Paso 2: Cargar Cantidades de Productos -->
+    <div class="ats-card p-3 p-lg-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="fw-bold">2. Cargar Cantidades</span>
+        <span class="tier-badge" [ngClass]="'tier-' + activePriceTier()">
+          Lista {{ activePriceTier() }} Activa
+        </span>
+      </div>
+
+      <div class="d-flex flex-column gap-2">
+        @for (product of products(); track product.id) {
+          <div
+            class="d-flex justify-content-between align-items-center p-2 px-3 border rounded-3 bg-light"
+            [class.border-danger]="(draftQuantities()[product.id] || 0) > product.stock"
+          >
+            <div>
+              <div class="fw-bold small">{{ product.name }}</div>
+              <div class="text-muted" style="font-size: 0.76rem;">
+                {{ formatMoney(product.prices[activePriceTier()]) }} c/u •
+                <span
+                  [class.text-danger]="(draftQuantities()[product.id] || 0) > product.stock"
+                  [class.text-primary]="(draftQuantities()[product.id] || 0) <= product.stock"
+                  class="fw-semibold"
+                >
+                  Disp: {{ product.stock }} u.
+                </span>
+              </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-1">
+              <button
+                type="button"
+                class="btn btn-outline-primary qty-btn"
+                (click)="updateQuantity(product.id, -1)"
+              >
+                -
+              </button>
+              <input
+                type="number"
+                class="qty-input"
+                min="0"
+                [max]="product.stock"
+                [value]="draftQuantities()[product.id] || 0"
+                (change)="setQuantity(product.id, $any($event.target).value)"
+              />
+              <button
+                type="button"
+                class="btn btn-primary qty-btn"
+                (click)="updateQuantity(product.id, 1)"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Columna Derecha: Resumen del Pedido (Sticky en PC) -->
+  <div class="col-12 col-lg-5">
+    <div class="ats-card p-3 p-lg-4 position-sticky" style="top: 60px;">
+      <h6 class="fw-bold border-bottom pb-2 mb-3">Resumen del Pedido</h6>
+
+      <div class="mb-3">
+        <label for="orderStatusSelect" class="fw-semibold small mb-1">Estado inicial</label>
+        <select
+          id="orderStatusSelect"
+          class="form-select"
+          [ngModel]="orderStatus()"
+          (ngModelChange)="orderStatus.set($event)"
+        >
+          <option value="PENDIENTE DE ENTREGA">PENDIENTE DE ENTREGA</option>
+          <option value="PAGADO">PAGADO (Entrega directa / Mostrador)</option>
+          <option value="ENTREGADO DEBE">ENTREGADO DEBE</option>
+          <option value="CUENTA CORRIENTE">CUENTA CORRIENTE</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label for="orderNotesInput" class="fw-semibold small mb-1">Observaciones de entrega</label>
+        <textarea
+          id="orderNotesInput"
+          class="form-control"
+          rows="2"
+          placeholder="Ej: Dejar en freezer del fondo..."
+          [ngModel]="orderNotes()"
+          (ngModelChange)="orderNotes.set($event)"
+        ></textarea>
+      </div>
+
+      <!-- Detalle del Carrito -->
+      @if (cartItems().length > 0) {
+        <div class="mb-3">
+          <label class="fw-semibold small text-muted mb-1">Ítems Seleccionados</label>
+          <ul class="list-group list-group-flush border rounded-3 small">
+            @for (item of cartItems(); track item.productId) {
+              <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                <span>
+                  <strong>{{ item.quantity }}x</strong> {{ item.productName }}
+                  <small class="text-muted d-block" style="font-size: 0.72rem;">
+                    {{ formatMoney(item.unitPrice) }} c/u
+                  </small>
+                </span>
+                <span class="fw-bold text-dark">{{ formatMoney(item.subtotal) }}</span>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      <!-- Totales -->
+      <div class="p-3 bg-light rounded-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted small">Cantidad total:</span>
+          <span class="fw-bold">{{ totalBags() }} bolsas</span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="fw-bold">TOTAL A COBRAR:</span>
+          <span class="fw-bold fs-3 text-primary">{{ formatMoney(totalAmount()) }}</span>
+        </div>
+      </div>
+
+      @if (isStockExceeded()) {
+        <div class="alert alert-danger py-2 small mb-3">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          Hay productos cuya cantidad supera el stock actual disponible en cámara.
+        </div>
+      }
+
+      <button
+        type="button"
+        class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm"
+        [disabled]="!canSubmit()"
+        (click)="submitOrder()"
+      >
+        <i class="bi bi-check2-circle me-1"></i>CONFIRMAR Y DESCONTAR STOCK
+      </button>
+    </div>
+  </div>
 </div>
+
+<!-- Modal Alta Rápida de Cliente -->
+@if (showQuickCustomerModal()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content ats-card border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-person-plus-fill text-primary me-2"></i>Nuevo Cliente Rápido
+          </h5>
+          <button
+            type="button"
+            class="btn-close"
+            aria-label="Cerrar"
+            (click)="closeQuickCustomerModal()"
+          ></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Nombre / Comercio</label>
+            <input
+              type="text"
+              class="form-control"
+              placeholder="Ej: Kiosco Pepe"
+              [ngModel]="newCustomerName()"
+              (ngModelChange)="newCustomerName.set($event)"
+            />
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Dirección</label>
+            <input
+              type="text"
+              class="form-control"
+              placeholder="Ej: Belgrano 540"
+              [ngModel]="newCustomerAddress()"
+              (ngModelChange)="newCustomerAddress.set($event)"
+            />
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Teléfono / WhatsApp</label>
+            <input
+              type="text"
+              class="form-control"
+              placeholder="Ej: 2323-556677"
+              [ngModel]="newCustomerPhone()"
+              (ngModelChange)="newCustomerPhone.set($event)"
+            />
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Lista de Precios Asignada</label>
+            <select
+              class="form-select"
+              [ngModel]="newCustomerTier()"
+              (ngModelChange)="newCustomerTier.set($event)"
+            >
+              <option value="A">Lista A (Mayoristas / Distribuidores)</option>
+              <option value="B">Lista B (Comercios medianos / Parrillas)</option>
+              <option value="C">Lista C (Minoristas / Kioscos)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button
+            type="button"
+            class="btn btn-outline-secondary"
+            (click)="closeQuickCustomerModal()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary fw-semibold"
+            [disabled]="!newCustomerName().trim()"
+            (click)="saveQuickCustomer()"
+          >
+            Guardar Cliente
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

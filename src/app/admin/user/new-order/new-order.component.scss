@@ -1,3 +1,23 @@
 :host {
   display: block;
 }
+
+.qty-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.qty-input {
+  width: 62px;
+  height: 38px;
+  text-align: center;
+  font-weight: 700;
+  border-radius: 10px;
+  border: 1px solid var(--ats-border);
+}
