@@ -1,6 +1,8 @@
-import { Injectable, computed, effect, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Observable, tap } from 'rxjs';
 import { CompanyInterface } from '@interfaces/company';
-import { UserRolCompanyInterface } from '@interfaces/user-rol-company';
+import { UserRolCompanyInterface, UserRolCompanyResultsInterface } from '@interfaces/user-rol-company';
+import { UserRolesCompanyService } from './user-roles-company';
 
 export type UserRole = 'OWNER' | 'SELLER' | 'DRIVER';
 
@@ -14,6 +16,8 @@ const STORAGE_KEYS = {
   providedIn: 'root'
 })
 export class CompanyContextService {
+  private readonly _userRolesCompanyService = inject(UserRolesCompanyService);
+
   // Estado base reactivo
   readonly companies = signal<CompanyInterface[]>([]);
   readonly activeCompany = signal<CompanyInterface | null>(this.loadStoredCompany());
@@ -63,6 +67,54 @@ export class CompanyContextService {
     effect(() => {
       localStorage.setItem(STORAGE_KEYS.ACTIVE_ROLE, this.activeRole());
     });
+
+    // Auto-recuperación si hay un usuario logueado en LocalStorage
+    this._tryAutoLoadUserContext();
+  }
+
+  /**
+   * Carga las membresías de empresa y roles del usuario desde la API
+   * y configura la compañía y rol activos.
+   */
+  public loadUserContext(usr_uuid: string): Observable<UserRolCompanyResultsInterface> {
+    return this._userRolesCompanyService.getUserRolesCompanyByUser(usr_uuid).pipe(
+      tap((res) => {
+        if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+          this.setUserRoles(res.data);
+
+          // Extraer compañías únicas
+          const companyMap = new Map<string, CompanyInterface>();
+          for (const item of res.data) {
+            const cmpRaw = (item as any).cmp;
+            if (cmpRaw && cmpRaw.cmp_uuid) {
+              companyMap.set(cmpRaw.cmp_uuid, cmpRaw as CompanyInterface);
+            } else if (item.cmp_uuid) {
+              if (!companyMap.has(item.cmp_uuid)) {
+                companyMap.set(item.cmp_uuid, {
+                  cmp_uuid: item.cmp_uuid,
+                  cmp_name: item.cmp_name || 'Compañía'
+                });
+              }
+            }
+          }
+
+          const companies = Array.from(companyMap.values());
+          this.setCompanies(companies);
+
+          // Si no hay activa o la activa no está entre las del usuario, fijar la primera
+          const currentActive = this.activeCompany();
+          if (!currentActive || !companies.some((c) => c.cmp_uuid === currentActive.cmp_uuid)) {
+            if (companies.length > 0) {
+              this.setActiveCompany(companies[0]);
+            }
+          }
+
+          // Resolver rol inicial
+          const firstRolName = (res.data[0] as any).rol?.rol_name || res.data[0].rol_name;
+          this.setActiveRole(this._mapToUserRole(firstRolName));
+        }
+      })
+    );
   }
 
   public setCompanies(companies: CompanyInterface[]): void {
@@ -100,6 +152,39 @@ export class CompanyContextService {
     this.hasSales.set(enabled);
   }
 
+  private _tryAutoLoadUserContext(): void {
+    try {
+      const storedUser = localStorage.getItem('ats_user');
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        if (parsed?.usr_uuid && !this.activeCompany()) {
+          this.loadUserContext(parsed.usr_uuid).subscribe({
+            error: (err) => console.warn('No se pudo inicializar user context:', err)
+          });
+        }
+      }
+    } catch {
+      // Ignorar fallback de lectura
+    }
+  }
+
+  private _mapToUserRole(rolName?: string): UserRole {
+    if (!rolName) return 'OWNER';
+    const lower = rolName.toLowerCase();
+    if (lower.includes('vendedor') || lower.includes('seller') || lower.includes('preventa')) {
+      return 'SELLER';
+    }
+    if (
+      lower.includes('repartidor') ||
+      lower.includes('chofer') ||
+      lower.includes('driver') ||
+      lower.includes('entrega')
+    ) {
+      return 'DRIVER';
+    }
+    return 'OWNER';
+  }
+
   private loadStoredCompany(): CompanyInterface | null {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.ACTIVE_COMPANY);
@@ -130,3 +215,5 @@ export class CompanyContextService {
     return 'OWNER';
   }
 }
+
+export { CompanyContextService as CompanyContext };
