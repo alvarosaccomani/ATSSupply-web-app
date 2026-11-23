@@ -148,7 +148,9 @@ export class Machines implements OnInit {
         error: (err) => {
           this.isSaving.set(false);
           console.error('Error al actualizar máquina:', err);
-          this.errorMessage.set(err.error?.message || 'Error al actualizar la máquina.');
+          this.errorMessage.set(
+            err.error?.error || err.error?.message || 'Error al actualizar la máquina.'
+          );
         }
       });
     } else {
@@ -162,7 +164,9 @@ export class Machines implements OnInit {
         error: (err) => {
           this.isSaving.set(false);
           console.error('Error al registrar máquina:', err);
-          this.errorMessage.set(err.error?.message || 'Error al registrar la máquina.');
+          this.errorMessage.set(
+            err.error?.error || err.error?.message || 'Error al registrar la máquina.'
+          );
         }
       });
     }
@@ -188,7 +192,9 @@ export class Machines implements OnInit {
         },
         error: (err) => {
           console.error('Error al cambiar estado de máquina:', err);
-          this.errorMessage.set('No se pudo modificar el estado de la máquina.');
+          this.errorMessage.set(
+            err.error?.error || err.error?.message || 'No se pudo modificar el estado de la máquina.'
+          );
         }
       });
   }
@@ -208,7 +214,9 @@ export class Machines implements OnInit {
       error: (err) => {
         console.error('Error al eliminar máquina:', err);
         this.errorMessage.set(
-          err.error?.message || 'No se pudo eliminar la máquina (puede tener partes de producción asociados).'
+          err.error?.error ||
+            err.error?.message ||
+            'No se pudo eliminar la máquina (puede tener partes de producción asociados).'
         );
       }
     });
