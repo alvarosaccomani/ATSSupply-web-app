@@ -81,6 +81,11 @@
           <i class="bi bi-people-fill"></i> Agenda de Clientes
         </a>
       }
+      @if (showProducts()) {
+        <a class="sidebar-btn" routerLink="products" routerLinkActive="active">
+          <i class="bi bi-box-seam-fill"></i> Catálogo de Productos
+        </a>
+      }
     </nav>
 
     <div class="p-3 border-top border-white border-opacity-10 small text-white-50">
@@ -156,6 +161,13 @@
       <div class="col">
         <a class="nav-btn" routerLink="customers" routerLinkActive="active">
           <i class="bi bi-people-fill"></i><span>Clientes</span>
+        </a>
+      </div>
+    }
+    @if (showProducts()) {
+      <div class="col">
+        <a class="nav-btn" routerLink="products" routerLinkActive="active">
+          <i class="bi bi-box-seam-fill"></i><span>Productos</span>
         </a>
       </div>
     }

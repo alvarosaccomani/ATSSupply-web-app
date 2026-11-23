@@ -25,6 +25,9 @@ export class UserLayoutComponent {
   readonly showCustomers = computed<boolean>(
     () => this.hasSales() && (this.role() === 'OWNER' || this.role() === 'SELLER')
   );
+  readonly showProducts = computed<boolean>(
+    () => this.role() === 'OWNER' || this.role() === 'SELLER'
+  );
 
   onRoleChange(newRole: string): void {
     this.companyContext.setActiveRole(newRole as UserRole);
