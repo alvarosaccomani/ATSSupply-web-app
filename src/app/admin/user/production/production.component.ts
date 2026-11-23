@@ -262,7 +262,9 @@ export class ProductionComponent implements OnInit {
         this.isSubmitting.set(false);
         console.error('Error al asentar parte de producción:', err);
         this.errorMessage.set(
-          err.error?.message || 'Ocurrió un error al registrar el lote de producción en la API.'
+          err.error?.error ||
+            err.error?.message ||
+            'Ocurrió un error al registrar el lote de producción en la API.'
         );
       }
     });
