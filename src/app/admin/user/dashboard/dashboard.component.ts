@@ -1,7 +1,6 @@
 import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { CompanyContextService } from '@services/company-context';
 import { ProductService } from '@services/products';
 import { OrderService } from '@services/orders';
@@ -39,7 +38,7 @@ export interface DashboardProductionLog {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [CommonModule, RouterLink],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
 })
@@ -177,43 +176,6 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  public changeOrderStatus(orderId: string, newStatus: OrderStatus): void {
-    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
-    if (!cmp_uuid) return;
-
-    const previousOrder = this.orders().find((o) => o.id === orderId);
-    const previousStatus = previousOrder?.status;
-
-    // Actualización optimista en memoria
-    this.orders.update((list) =>
-      list.map((order) =>
-        order.id === orderId ? { ...order, status: newStatus } : order
-      )
-    );
-
-    // Mapeo a convención del backend
-    const backendStatus: BackendOrderStatus = this._mapToBackendStatus(newStatus);
-
-    this._orderService
-      .updateOrder(cmp_uuid, orderId, { ord_status: backendStatus })
-      .subscribe({
-        next: () => {
-          // Confirmado por backend
-        },
-        error: (err) => {
-          console.error('Error al actualizar estado de pedido:', err);
-          if (previousStatus) {
-            this.orders.update((list) =>
-              list.map((order) =>
-                order.id === orderId ? { ...order, status: previousStatus } : order
-              )
-            );
-          }
-          this.errorMessage.set('No se pudo guardar el cambio de estado del pedido.');
-        }
-      });
-  }
-
   public getStatusBadgeClass(status: OrderStatus): string {
     const badgeMap: Record<OrderStatus, string> = {
       'PENDIENTE DE ENTREGA': 'badge-pendiente',
@@ -238,19 +200,6 @@ export class DashboardComponent implements OnInit {
         return 'CUENTA CORRIENTE';
       default:
         return 'PENDIENTE DE ENTREGA';
-    }
-  }
-
-  private _mapToBackendStatus(dashboardStatus: OrderStatus): BackendOrderStatus {
-    switch (dashboardStatus) {
-      case 'PAGADO':
-        return 'PAGADO';
-      case 'ENTREGADO DEBE':
-        return 'ENTREGADO_DEBE';
-      case 'CUENTA CORRIENTE':
-        return 'CUENTA_CORRIENTE';
-      default:
-        return 'PENDIENTE_DE_ENTREGA';
     }
   }
 }
