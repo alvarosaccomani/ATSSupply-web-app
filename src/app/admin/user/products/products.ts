@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { CompanyContextService } from '@services/company-context';
 import { ProductService } from '@services/products';
 import { PriceTierService } from '@services/price-tiers';
+import { ProductBomService } from '@services/product-bom';
 import { ProductInterface, ProductType } from '@interfaces/product';
 import { PriceTierInterface } from '@interfaces/price-tier';
 
@@ -11,6 +12,12 @@ export interface TierPriceFormItem {
   prct_uuid: string;
   tierName: string;
   price: number;
+}
+
+export interface RecipeFormItem {
+  prd_uuid_supply: string;
+  supplyName?: string;
+  quantityPerUnit: number;
 }
 
 @Component({
@@ -24,6 +31,7 @@ export class Products implements OnInit {
   private readonly _companyContext = inject(CompanyContextService);
   private readonly _productService = inject(ProductService);
   private readonly _priceTierService = inject(PriceTierService);
+  private readonly _productBomService = inject(ProductBomService);
 
   // Estados de carga y feedback
   readonly isLoading = signal<boolean>(false);
@@ -55,6 +63,12 @@ export class Products implements OnInit {
   readonly formMinStock = signal<number>(20);
   readonly formActive = signal<boolean>(true);
   readonly formTierPrices = signal<TierPriceFormItem[]>([]);
+  readonly formRecipeItems = signal<RecipeFormItem[]>([]);
+
+  // Lista de materias primas disponibles para recetas
+  readonly availableSupplies = computed<ProductInterface[]>(() =>
+    this.products().filter((p) => p.prd_type === 'SUPPLY' && p.prd_active !== false)
+  );
 
   // Computed: Lista filtrada reactiva
   readonly filteredProducts = computed<ProductInterface[]>(() => {
@@ -154,6 +168,7 @@ export class Products implements OnInit {
       price: 0
     }));
     this.formTierPrices.set(tierPrices);
+    this.formRecipeItems.set([]);
 
     this.isFormOpen.set(true);
   }
@@ -185,6 +200,25 @@ export class Products implements OnInit {
     });
     this.formTierPrices.set(tierPrices);
 
+    // Cargar receta BOM si es producto terminado
+    this.formRecipeItems.set([]);
+    if (product.prd_type === 'FINISHED') {
+      const cmpUuid = this._companyContext.activeCompany()?.cmp_uuid || 'cmp-ats-001';
+      this._productBomService.getRecipe(cmpUuid, product.prd_uuid).subscribe({
+        next: (res) => {
+          if (res?.data && Array.isArray(res.data)) {
+            const mapped = res.data.map((item) => ({
+              prd_uuid_supply: item.prd_uuid_supply,
+              supplyName: item.supplyProduct?.prd_name || '',
+              quantityPerUnit: Number(item.prdbom_quantityperunit) || 1
+            }));
+            this.formRecipeItems.set(mapped);
+          }
+        },
+        error: (err) => console.warn('Aviso: no se pudo cargar receta BOM del producto:', err)
+      });
+    }
+
     this.isFormOpen.set(true);
   }
 
@@ -193,6 +227,55 @@ export class Products implements OnInit {
    */
   public closeModal(): void {
     this.isFormOpen.set(false);
+  }
+
+  /**
+   * Agrega un nuevo componente a la receta de fabricación.
+   */
+  public addRecipeItem(): void {
+    const supplies = this.availableSupplies();
+    if (supplies.length === 0) return;
+    const firstSupply = supplies[0];
+    this.formRecipeItems.update((items) => [
+      ...items,
+      {
+        prd_uuid_supply: firstSupply.prd_uuid,
+        supplyName: firstSupply.prd_name,
+        quantityPerUnit: 1
+      }
+    ]);
+  }
+
+  /**
+   * Elimina un componente de la receta.
+   */
+  public removeRecipeItem(index: number): void {
+    this.formRecipeItems.update((items) => items.filter((_, i) => i !== index));
+  }
+
+  /**
+   * Actualiza el insumo seleccionado en una fila de la receta.
+   */
+  public updateRecipeItemSupply(index: number, prd_uuid_supply: string): void {
+    const supply = this.availableSupplies().find((s) => s.prd_uuid === prd_uuid_supply);
+    this.formRecipeItems.update((items) =>
+      items.map((item, i) =>
+        i === index
+          ? { ...item, prd_uuid_supply, supplyName: supply?.prd_name || '' }
+          : item
+      )
+    );
+  }
+
+  /**
+   * Actualiza la proporción consumida por unidad producida.
+   */
+  public updateRecipeItemQuantity(index: number, quantity: number): void {
+    this.formRecipeItems.update((items) =>
+      items.map((item, i) =>
+        i === index ? { ...item, quantityPerUnit: Number(quantity) || 1 } : item
+      )
+    );
   }
 
   /**
@@ -240,10 +323,35 @@ export class Products implements OnInit {
       const prdUuid = this.currentPrdUuid()!;
       this._productService.updateProduct(cmpUuid, prdUuid, payload).subscribe({
         next: () => {
-          this.isSaving.set(false);
-          this.successMessage.set(`Producto "${payload.prd_name}" actualizado exitosamente.`);
-          this.closeModal();
-          this.loadData();
+          if (this.formType() === 'FINISHED') {
+            const recipePayload = this.formRecipeItems()
+              .filter((r) => !!r.prd_uuid_supply && r.quantityPerUnit > 0)
+              .map((r) => ({
+                prd_uuid_supply: r.prd_uuid_supply,
+                prdbom_quantityperunit: Number(r.quantityPerUnit)
+              }));
+
+            this._productBomService.setFullRecipe(cmpUuid, prdUuid, recipePayload).subscribe({
+              next: () => {
+                this.isSaving.set(false);
+                this.successMessage.set(`Producto "${payload.prd_name}" y receta guardados exitosamente.`);
+                this.closeModal();
+                this.loadData();
+              },
+              error: (err) => {
+                console.warn('Aviso al guardar receta BOM:', err);
+                this.isSaving.set(false);
+                this.successMessage.set(`Producto "${payload.prd_name}" actualizado.`);
+                this.closeModal();
+                this.loadData();
+              }
+            });
+          } else {
+            this.isSaving.set(false);
+            this.successMessage.set(`Producto "${payload.prd_name}" actualizado exitosamente.`);
+            this.closeModal();
+            this.loadData();
+          }
         },
         error: (err) => {
           this.isSaving.set(false);
@@ -255,11 +363,36 @@ export class Products implements OnInit {
       });
     } else {
       this._productService.saveProduct(payload).subscribe({
-        next: () => {
-          this.isSaving.set(false);
-          this.successMessage.set(`Producto "${payload.prd_name}" dado de alta exitosamente.`);
-          this.closeModal();
-          this.loadData();
+        next: (res: any) => {
+          const newPrdUuid = res?.data?.prd_uuid;
+          if (newPrdUuid && this.formType() === 'FINISHED' && this.formRecipeItems().length > 0) {
+            const recipePayload = this.formRecipeItems()
+              .filter((r) => !!r.prd_uuid_supply && r.quantityPerUnit > 0)
+              .map((r) => ({
+                prd_uuid_supply: r.prd_uuid_supply,
+                prdbom_quantityperunit: Number(r.quantityPerUnit)
+              }));
+
+            this._productBomService.setFullRecipe(cmpUuid, newPrdUuid, recipePayload).subscribe({
+              next: () => {
+                this.isSaving.set(false);
+                this.successMessage.set(`Producto "${payload.prd_name}" y receta dados de alta exitosamente.`);
+                this.closeModal();
+                this.loadData();
+              },
+              error: () => {
+                this.isSaving.set(false);
+                this.successMessage.set(`Producto "${payload.prd_name}" dado de alta exitosamente.`);
+                this.closeModal();
+                this.loadData();
+              }
+            });
+          } else {
+            this.isSaving.set(false);
+            this.successMessage.set(`Producto "${payload.prd_name}" dado de alta exitosamente.`);
+            this.closeModal();
+            this.loadData();
+          }
         },
         error: (err) => {
           this.isSaving.set(false);

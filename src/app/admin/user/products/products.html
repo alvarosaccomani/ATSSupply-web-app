@@ -387,6 +387,82 @@
               }
             </div>
           </div>
+
+          <!-- Receta / Materias Primas Consumidas (BOM) para Productos Terminados -->
+          @if (formType() === 'FINISHED') {
+            <div class="border rounded-3 p-3 bg-light mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0 text-dark small text-uppercase">
+                  <i class="bi bi-diagram-3-fill me-1 text-primary"></i>Receta de Fabricación / Insumos (BOM)
+                </h6>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-primary"
+                  [disabled]="availableSupplies().length === 0"
+                  (click)="addRecipeItem()"
+                >
+                  <i class="bi bi-plus-circle me-1"></i>Agregar Insumo
+                </button>
+              </div>
+              <p class="text-muted small mb-3">
+                Indicá qué materias primas se consumen automáticamente del stock por cada unidad producida de este producto.
+              </p>
+
+              @if (availableSupplies().length === 0) {
+                <div class="alert alert-warning py-2 small mb-0">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Para configurar una receta, primero debés dar de alta al menos un producto de tipo <strong>Insumo / Materia Prima</strong> en el catálogo.
+                </div>
+              } @else {
+                <div class="d-flex flex-column gap-2">
+                  @for (item of formRecipeItems(); track $index) {
+                    <div class="row g-2 align-items-center bg-white p-2 rounded-2 border">
+                      <div class="col-12 col-sm-7">
+                        <label class="form-label small text-muted mb-1">Materia Prima / Insumo</label>
+                        <select
+                          class="form-select form-select-sm"
+                          [ngModel]="item.prd_uuid_supply"
+                          (ngModelChange)="updateRecipeItemSupply($index, $event)"
+                        >
+                          @for (sup of availableSupplies(); track sup.prd_uuid) {
+                            <option [value]="sup.prd_uuid">{{ sup.prd_name }} (Stock: {{ sup.prd_currentstock || 0 }})</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="col-8 col-sm-3">
+                        <label class="form-label small text-muted mb-1">Consumo x Unidad</label>
+                        <div class="input-group input-group-sm">
+                          <input
+                            type="number"
+                            class="form-control"
+                            min="0.01"
+                            step="0.01"
+                            [ngModel]="item.quantityPerUnit"
+                            (ngModelChange)="updateRecipeItemQuantity($index, $event)"
+                          />
+                          <span class="input-group-text bg-light">u.</span>
+                        </div>
+                      </div>
+                      <div class="col-4 col-sm-2 d-flex justify-content-end align-items-end pt-3">
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-outline-danger w-100"
+                          title="Eliminar insumo de la receta"
+                          (click)="removeRecipeItem($index)"
+                        >
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+                  } @empty {
+                    <div class="text-center text-muted small py-2 border rounded-2 bg-white">
+                      <i class="bi bi-diagram-2 me-1"></i>Sin materias primas asignadas a la receta. (Hacé clic en <strong>"Agregar Insumo"</strong> para vincular las bolsas vacías).
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
         </div>
 
         <div class="modal-footer bg-light">
