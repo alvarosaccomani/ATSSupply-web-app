@@ -6,6 +6,7 @@ import { CustomerService } from '@services/customers';
 import { PriceTierService } from '@services/price-tiers';
 import { CompanyContextService } from '@services/company-context';
 import { PriceTierInterface } from '@interfaces/price-tier';
+import { CustomerInterface } from '@interfaces/customer';
 
 export type CustomerTierCode = 'A' | 'B' | 'C';
 
@@ -38,8 +39,9 @@ export class CustomersComponent implements OnInit {
 
   readonly searchQuery = signal<string>('');
 
-  // Modal Alta Rápida
+  // Modal Alta / Edición de Cliente
   readonly showQuickCustomerModal = signal<boolean>(false);
+  readonly editingCustomerId = signal<string | null>(null);
   readonly isSaving = signal<boolean>(false);
   readonly modalErrorMessage = signal<string | null>(null);
   readonly newCustomerName = signal<string>('');
@@ -145,6 +147,7 @@ export class CustomersComponent implements OnInit {
   }
 
   public openQuickCustomerModal(): void {
+    this.editingCustomerId.set(null);
     this.newCustomerName.set('');
     this.newCustomerAddress.set('');
     this.newCustomerPhone.set('');
@@ -154,8 +157,21 @@ export class CustomersComponent implements OnInit {
     this.showQuickCustomerModal.set(true);
   }
 
+  public openEditCustomerModal(customer: CustomerViewItem): void {
+    this.editingCustomerId.set(customer.id);
+    this.newCustomerName.set(customer.name);
+    this.newCustomerAddress.set(customer.address);
+    this.newCustomerPhone.set(customer.phone);
+    this.newCustomerTier.set(customer.tier);
+    this.modalErrorMessage.set(null);
+    this.isSaving.set(false);
+    this.showQuickCustomerModal.set(true);
+  }
+
   public closeQuickCustomerModal(): void {
+    if (this.isSaving()) return;
     this.showQuickCustomerModal.set(false);
+    this.editingCustomerId.set(null);
     this.modalErrorMessage.set(null);
     this.isSaving.set(false);
   }
@@ -189,18 +205,40 @@ export class CustomersComponent implements OnInit {
     );
     const prct_uuid = matchingTier?.prct_uuid;
 
-    // Persistencia HTTP real en PostgreSQL
-    this._customerService
-      .saveCustomer({
-        cmp_uuid,
-        prct_uuid,
-        cus_name: name.toUpperCase(),
-        cus_address: address,
-        cus_phone: this.newCustomerPhone().trim(),
-        cus_active: true
-      })
-      .subscribe({
-        next: (res) => {
+    const payload: Partial<CustomerInterface> = {
+      cmp_uuid,
+      prct_uuid,
+      cus_name: name.toUpperCase(),
+      cus_address: address,
+      cus_phone: this.newCustomerPhone().trim(),
+      cus_active: true
+    };
+
+    const editingId = this.editingCustomerId();
+
+    if (editingId) {
+      // Actualización en PostgreSQL
+      this._customerService.updateCustomer(cmp_uuid, editingId, payload).subscribe({
+        next: () => {
+          this.isSaving.set(false);
+          this.closeQuickCustomerModal();
+          this.successMessage.set(`Cliente "${name.toUpperCase()}" actualizado con éxito.`);
+          this.loadCustomers();
+        },
+        error: (err) => {
+          this.isSaving.set(false);
+          console.error('Error al actualizar cliente en backend:', err);
+          const errorMsg =
+            err.error?.error ||
+            err.error?.message ||
+            'No se pudo actualizar el cliente en el servidor.';
+          this.modalErrorMessage.set(errorMsg);
+        }
+      });
+    } else {
+      // Alta en PostgreSQL
+      this._customerService.saveCustomer(payload).subscribe({
+        next: () => {
           this.isSaving.set(false);
           this.closeQuickCustomerModal();
           this.successMessage.set(`Cliente "${name.toUpperCase()}" registrado con éxito.`);
@@ -216,5 +254,6 @@ export class CustomersComponent implements OnInit {
           this.modalErrorMessage.set(errorMsg);
         }
       });
+    }
   }
 }

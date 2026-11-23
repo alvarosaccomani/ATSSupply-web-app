@@ -81,7 +81,7 @@
 
         <!-- Acciones Rápidas -->
         <div class="d-flex justify-content-between align-items-center pt-2 border-top mt-auto">
-          <div>
+          <div class="d-flex gap-2">
             @if (c.phone) {
               <a
                 [href]="getWhatsAppUrl(c.phone)"
@@ -93,6 +93,14 @@
                 <i class="bi bi-whatsapp me-1"></i>WhatsApp
               </a>
             }
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-semibold"
+              title="Editar datos del cliente"
+              (click)="openEditCustomerModal(c)"
+            >
+              <i class="bi bi-pencil-square me-1"></i>Editar
+            </button>
           </div>
 
           <a
@@ -120,7 +128,7 @@
 </div>
 }
 
-<!-- Modal Alta Rápida de Cliente -->
+<!-- Modal Alta / Edición de Cliente -->
 @if (showQuickCustomerModal()) {
   <div class="modal-backdrop fade show"></div>
   <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
@@ -128,7 +136,11 @@
       <div class="modal-content ats-card border-0 shadow">
         <div class="modal-header border-bottom">
           <h5 class="modal-title fw-bold">
-            <i class="bi bi-person-plus-fill text-primary me-2"></i>Nuevo Cliente
+            @if (editingCustomerId()) {
+              <i class="bi bi-pencil-square text-primary me-2"></i>Editar Cliente
+            } @else {
+              <i class="bi bi-person-plus-fill text-primary me-2"></i>Nuevo Cliente
+            }
           </h5>
           <button
             type="button"
@@ -220,6 +232,8 @@
             @if (isSaving()) {
               <span class="spinner-border spinner-border-sm me-1" role="status"></span>
               Guardando...
+            } @else if (editingCustomerId()) {
+              <i class="bi bi-check2-circle me-1"></i>Guardar Cambios
             } @else {
               <i class="bi bi-check2-circle me-1"></i>Guardar Cliente
             }
