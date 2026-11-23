@@ -1,5 +1,9 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { OrderService } from '@services/orders';
+import { ProductService } from '@services/products';
+import { CompanyContextService } from '@services/company-context';
+import { OrderInterface, OrderStatus } from '@interfaces/order';
 
 export type DeliveryStatus = 'PENDIENTE DE ENTREGA' | 'PAGADO' | 'ENTREGADO DEBE' | 'CUENTA CORRIENTE';
 
@@ -28,65 +32,20 @@ export interface TruckLoadItem {
   templateUrl: './delivery.component.html',
   styleUrl: './delivery.component.scss'
 })
-export class DeliveryComponent {
+export class DeliveryComponent implements OnInit {
+  private readonly _orderService = inject(OrderService);
+  private readonly _productService = inject(ProductService);
+  private readonly _companyContext = inject(CompanyContextService);
+
+  // Estados de carga y feedback
+  readonly isLoading = signal<boolean>(false);
+  readonly errorMessage = signal<string | null>(null);
+
   // Catálogo de productos para consolidar la estiba
-  readonly products = signal<{ id: string; name: string }[]>([
-    { id: 'prd-2', name: 'Bolsa 2 kg' },
-    { id: 'prd-3', name: 'Bolsa 3 kg' },
-    { id: 'prd-5', name: 'Bolsa 5 kg' },
-    { id: 'prd-15', name: 'Bolsa 15 kg' }
-  ]);
+  readonly products = signal<{ id: string; name: string }[]>([]);
 
   // Pedidos asignados a la hoja de ruta
-  readonly orders = signal<DeliveryOrderItem[]>([
-    {
-      id: 'ord-101',
-      customerName: 'DISTRIBUIDORA ERRAMUSPE',
-      address: 'Ruta 7 Km 68',
-      phone: '2323551100',
-      detailSummary: '15x Bolsa 3 kg',
-      notes: 'Entregar antes de las 17 hs',
-      total: 45000,
-      status: 'PENDIENTE DE ENTREGA',
-      items: [{ productId: 'prd-3', qty: 15 }]
-    },
-    {
-      id: 'ord-102',
-      customerName: 'KITA',
-      address: 'Av. Constitución 1240',
-      phone: '2323552200',
-      detailSummary: '100x Bolsa 15 kg',
-      notes: 'Descargar por portón lateral',
-      total: 1500000,
-      status: 'PENDIENTE DE ENTREGA',
-      items: [{ productId: 'prd-15', qty: 100 }]
-    },
-    {
-      id: 'ord-104',
-      customerName: 'ARRUS',
-      address: 'Mitre 890',
-      phone: '',
-      detailSummary: '20x Bolsa 2 kg, 10x Bolsa 5 kg',
-      notes: 'Cobro en efectivo',
-      total: 105000,
-      status: 'PENDIENTE DE ENTREGA',
-      items: [
-        { productId: 'prd-2', qty: 20 },
-        { productId: 'prd-5', qty: 10 }
-      ]
-    },
-    {
-      id: 'ord-105',
-      customerName: 'DESPENSA DAMIAN',
-      address: 'Roma y Vélez Sarsfield',
-      phone: '',
-      detailSummary: '5x Bolsa 3 kg',
-      notes: '',
-      total: 20000,
-      status: 'PENDIENTE DE ENTREGA',
-      items: [{ productId: 'prd-3', qty: 5 }]
-    }
-  ]);
+  readonly orders = signal<DeliveryOrderItem[]>([]);
 
   // Computed Signals
   readonly pendingDeliveries = computed<DeliveryOrderItem[]>(() =>
@@ -99,12 +58,7 @@ export class DeliveryComponent {
 
   readonly truckLoadSummary = computed<TruckLoadItem[]>(() => {
     const pending = this.pendingDeliveries();
-    const productMap: Record<string, number> = {
-      'prd-2': 0,
-      'prd-3': 0,
-      'prd-5': 0,
-      'prd-15': 0
-    };
+    const productMap: Record<string, number> = {};
 
     pending.forEach((o) => {
       o.items.forEach((i) => {
@@ -133,12 +87,117 @@ export class DeliveryComponent {
       .reduce((acc, o) => acc + o.total, 0)
   );
 
+  constructor() {
+    // Reaccionar automáticamente ante cambios de compañía activa
+    effect(() => {
+      const comp = this._companyContext.activeCompany();
+      if (comp?.cmp_uuid) {
+        this.loadDeliveryData();
+      }
+    });
+  }
+
+  public ngOnInit(): void {
+    this.loadDeliveryData();
+  }
+
+  public loadDeliveryData(): void {
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (!cmp_uuid) {
+      return;
+    }
+
+    this.isLoading.set(true);
+    this.errorMessage.set(null);
+
+    // Cargar Productos para consolidar estiba
+    this._productService.getProducts(cmp_uuid).subscribe({
+      next: (res) => {
+        if (res?.data && Array.isArray(res.data)) {
+          this.products.set(
+            res.data.map((p) => ({
+              id: p.prd_uuid,
+              name: p.prd_name
+            }))
+          );
+        }
+      },
+      error: (err) => console.warn('Error al cargar productos para hoja de ruta:', err)
+    });
+
+    // Cargar Pedidos de la empresa
+    this._orderService.getOrders(cmp_uuid).subscribe({
+      next: (res) => {
+        this.isLoading.set(false);
+        if (res?.data && Array.isArray(res.data)) {
+          const mappedOrders: DeliveryOrderItem[] = res.data.map((ord: OrderInterface) => {
+            const rawDetails = (ord as any).details || [];
+            const summaryParts = rawDetails.map((d: any) => {
+              const prodName = d.product?.prd_name || 'Bolsa';
+              return `${d.ordd_quantity}x ${prodName}`;
+            });
+
+            return {
+              id: ord.ord_uuid,
+              customerName: (ord as any).customer?.cus_name || 'Cliente sin nombre',
+              address: (ord as any).customer?.cus_address || 'Sin dirección',
+              phone: (ord as any).customer?.cus_phone || '',
+              detailSummary: summaryParts.join(', ') || 'Sin detalle de ítems',
+              notes: ord.ord_notes || '',
+              total: Number(ord.ord_totalamount) || 0,
+              status: this._mapToDeliveryStatus(ord.ord_status as OrderStatus),
+              items: rawDetails.map((d: any) => ({
+                productId: d.prd_uuid,
+                qty: Number(d.ordd_quantity) || 0
+              }))
+            };
+          });
+
+          this.orders.set(mappedOrders);
+        }
+      },
+      error: (err) => {
+        this.isLoading.set(false);
+        this.errorMessage.set('No se pudieron obtener los pedidos para el reparto.');
+        console.warn('Error al consultar pedidos:', err);
+      }
+    });
+  }
+
   public markDeliveryStatus(orderId: string, status: DeliveryStatus): void {
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (!cmp_uuid) return;
+
+    const previousOrder = this.orders().find((o) => o.id === orderId);
+    const previousStatus = previousOrder?.status;
+
+    // Actualización optimista en memoria
     this.orders.update((list) =>
-      list.map((order) =>
-        order.id === orderId ? { ...order, status } : order
-      )
+      list.map((order) => (order.id === orderId ? { ...order, status } : order))
     );
+
+    // Mapeo a convención del backend
+    const backendStatus: OrderStatus = this._mapToBackendStatus(status);
+
+    this._orderService
+      .updateOrder(cmp_uuid, orderId, { ord_status: backendStatus })
+      .subscribe({
+        next: () => {
+          // Confirmado por backend
+        },
+        error: (err) => {
+          console.error('Error al persistir estado de entrega:', err);
+          // Reversión optimista ante falla de red
+          if (previousStatus) {
+            this.orders.update((list) =>
+              list.map((order) =>
+                order.id === orderId ? { ...order, status: previousStatus } : order
+              )
+            );
+          }
+          this.errorMessage.set('No se pudo guardar el cambio de estado en el servidor.');
+        }
+      });
   }
 
   public openNavigationMap(address: string): void {
@@ -148,5 +207,31 @@ export class DeliveryComponent {
 
   public formatMoney(amount: number): string {
     return '$' + amount.toLocaleString('es-AR');
+  }
+
+  private _mapToDeliveryStatus(backendStatus: OrderStatus | string): DeliveryStatus {
+    switch (backendStatus) {
+      case 'PAGADO':
+        return 'PAGADO';
+      case 'ENTREGADO_DEBE':
+        return 'ENTREGADO DEBE';
+      case 'CUENTA_CORRIENTE':
+        return 'CUENTA CORRIENTE';
+      default:
+        return 'PENDIENTE DE ENTREGA';
+    }
+  }
+
+  private _mapToBackendStatus(deliveryStatus: DeliveryStatus): OrderStatus {
+    switch (deliveryStatus) {
+      case 'PAGADO':
+        return 'PAGADO';
+      case 'ENTREGADO DEBE':
+        return 'ENTREGADO_DEBE';
+      case 'CUENTA CORRIENTE':
+        return 'CUENTA_CORRIENTE';
+      default:
+        return 'PENDIENTE_DE_ENTREGA';
+    }
   }
 }
