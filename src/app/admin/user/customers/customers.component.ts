@@ -34,11 +34,14 @@ export class CustomersComponent implements OnInit {
   readonly priceTiers = signal<PriceTierInterface[]>([]);
   readonly isLoading = signal<boolean>(false);
   readonly errorMessage = signal<string | null>(null);
+  readonly successMessage = signal<string | null>(null);
 
   readonly searchQuery = signal<string>('');
 
   // Modal Alta Rápida
   readonly showQuickCustomerModal = signal<boolean>(false);
+  readonly isSaving = signal<boolean>(false);
+  readonly modalErrorMessage = signal<string | null>(null);
   readonly newCustomerName = signal<string>('');
   readonly newCustomerAddress = signal<string>('');
   readonly newCustomerPhone = signal<string>('');
@@ -146,22 +149,39 @@ export class CustomersComponent implements OnInit {
     this.newCustomerAddress.set('');
     this.newCustomerPhone.set('');
     this.newCustomerTier.set('C');
+    this.modalErrorMessage.set(null);
+    this.isSaving.set(false);
     this.showQuickCustomerModal.set(true);
   }
 
   public closeQuickCustomerModal(): void {
     this.showQuickCustomerModal.set(false);
+    this.modalErrorMessage.set(null);
+    this.isSaving.set(false);
   }
 
   public saveQuickCustomer(): void {
     const name = this.newCustomerName().trim();
-    if (!name) return;
+    const address = this.newCustomerAddress().trim();
+
+    if (!name) {
+      this.modalErrorMessage.set('El nombre o razón social del cliente es obligatorio.');
+      return;
+    }
+
+    if (!address) {
+      this.modalErrorMessage.set('La dirección del cliente es obligatoria.');
+      return;
+    }
 
     const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
     if (!cmp_uuid) {
-      this.errorMessage.set('No hay una empresa activa seleccionada para registrar clientes.');
+      this.modalErrorMessage.set('No hay una empresa activa seleccionada para registrar clientes.');
       return;
     }
+
+    this.isSaving.set(true);
+    this.modalErrorMessage.set(null);
 
     const selectedTierCode = this.newCustomerTier();
     const matchingTier = this.priceTiers().find(
@@ -169,39 +189,31 @@ export class CustomersComponent implements OnInit {
     );
     const prct_uuid = matchingTier?.prct_uuid;
 
-    const tempId = 'cus-' + Date.now();
-    const newCus: CustomerViewItem = {
-      id: tempId,
-      name: name.toUpperCase(),
-      address: this.newCustomerAddress().trim(),
-      phone: this.newCustomerPhone().trim(),
-      tier: selectedTierCode
-    };
-
-    // Actualización optimista en memoria
-    this.customers.update((list) => [newCus, ...list]);
-    this.closeQuickCustomerModal();
-
     // Persistencia HTTP real en PostgreSQL
     this._customerService
       .saveCustomer({
         cmp_uuid,
         prct_uuid,
-        cus_name: newCus.name,
-        cus_address: newCus.address,
-        cus_phone: newCus.phone,
+        cus_name: name.toUpperCase(),
+        cus_address: address,
+        cus_phone: this.newCustomerPhone().trim(),
         cus_active: true
       })
       .subscribe({
         next: (res) => {
-          if (res?.data?.cus_uuid) {
-            this.customers.update((list) =>
-              list.map((c) => (c.id === tempId ? { ...c, id: res.data.cus_uuid } : c))
-            );
-          }
+          this.isSaving.set(false);
+          this.closeQuickCustomerModal();
+          this.successMessage.set(`Cliente "${name.toUpperCase()}" registrado con éxito.`);
+          this.loadCustomers();
         },
         error: (err) => {
-          console.warn('Error al persistir cliente en backend:', err);
+          this.isSaving.set(false);
+          console.error('Error al persistir cliente en backend:', err);
+          const errorMsg =
+            err.error?.error ||
+            err.error?.message ||
+            'No se pudo registrar el cliente en el servidor.';
+          this.modalErrorMessage.set(errorMsg);
         }
       });
   }
