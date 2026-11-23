@@ -3,16 +3,47 @@
   <div class="col-12 col-lg-7">
     <!-- Paso 1: Selección de Cliente -->
     <div class="ats-card p-3 p-lg-4 mb-3">
-      <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
         <label class="fw-bold mb-0">1. Seleccionar Cliente</label>
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-primary rounded-pill"
-          (click)="openQuickCustomerModal()"
-        >
-          <i class="bi bi-person-plus-fill me-1"></i>Cliente nuevo rápido
-        </button>
+        <div class="d-flex gap-2">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-success rounded-pill px-3 fw-semibold"
+            [disabled]="isDetectingLocation() || isLoading()"
+            (click)="detectNearestCustomer()"
+            title="Detectar cliente más cercano a mi ubicación GPS actual"
+          >
+            @if (isDetectingLocation()) {
+              <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+              Localizando...
+            } @else {
+              <i class="bi bi-geo-alt-fill me-1"></i>Detectar más cercano
+            }
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary rounded-pill"
+            (click)="openQuickCustomerModal()"
+          >
+            <i class="bi bi-person-plus-fill me-1"></i>Cliente nuevo rápido
+          </button>
+        </div>
       </div>
+
+      @if (nearestCustomerNotice()) {
+        <div class="alert alert-success py-2 small mb-2 d-flex align-items-center justify-content-between">
+          <span>
+            <i class="bi bi-geo-alt-fill me-1 text-danger"></i>
+            Cliente más cercano detectado: <strong>{{ nearestCustomerNotice()?.name }}</strong> (a {{ nearestCustomerNotice()?.distanceFormatted }}).
+          </span>
+          <button
+            type="button"
+            class="btn-close btn-sm p-1"
+            aria-label="Cerrar aviso"
+            (click)="nearestCustomerNotice.set(null)"
+          ></button>
+        </div>
+      }
 
       <select
         id="orderCustomerSelect"
@@ -26,6 +57,9 @@
         @for (cus of customers(); track cus.id) {
           <option [value]="cus.id">
             {{ cus.name }} (Cat {{ cus.tier }})
+            @if (cus.distanceMeters !== undefined) {
+              — a {{ formatDistance(cus.distanceMeters) }}
+            }
           </option>
         }
       </select>
@@ -35,6 +69,9 @@
           <span>
             <i class="bi bi-geo-alt-fill text-primary me-1"></i>
             {{ selectedCustomer()?.address || 'Sin dirección registrada' }}
+            @if (selectedCustomer()?.distanceMeters !== undefined) {
+              <strong class="text-success ms-1">(a {{ formatDistance(selectedCustomer()!.distanceMeters!) }})</strong>
+            }
           </span>
           @if (selectedCustomer()?.phone) {
             <span>

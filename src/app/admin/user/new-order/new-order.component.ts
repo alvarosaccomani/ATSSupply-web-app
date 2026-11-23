@@ -17,6 +17,9 @@ export interface PosCustomer {
   tier: PriceTierCode;
   address: string;
   phone: string;
+  lat?: number | null;
+  lng?: number | null;
+  distanceMeters?: number;
 }
 
 export interface PosProduct {
@@ -57,6 +60,8 @@ export class NewOrderComponent implements OnInit {
   // Clientes cargados para POS
   readonly customers = signal<PosCustomer[]>([]);
   readonly selectedCustomerId = signal<string>('');
+  readonly isDetectingLocation = signal<boolean>(false);
+  readonly nearestCustomerNotice = signal<{ name: string; distanceFormatted: string } | null>(null);
 
   // Catálogo de Productos con Matriz de Precios
   readonly products = signal<PosProduct[]>([]);
@@ -152,13 +157,22 @@ export class NewOrderComponent implements OnInit {
     this._customerService.getCustomers(cmp_uuid).subscribe({
       next: (res) => {
         if (res?.data && Array.isArray(res.data)) {
-          const mappedCustomers: PosCustomer[] = res.data.map((c) => ({
-            id: c.cus_uuid,
-            name: c.cus_name,
-            tier: 'C',
-            address: c.cus_address || '',
-            phone: c.cus_phone || ''
-          }));
+          const mappedCustomers: PosCustomer[] = res.data.map((c) => {
+            const rawTier = (c.priceTier?.prct_code || 'C').toUpperCase();
+            const tierCode: PriceTierCode = ['A', 'B', 'C'].includes(rawTier)
+              ? (rawTier as PriceTierCode)
+              : 'C';
+
+            return {
+              id: c.cus_uuid,
+              name: c.cus_name,
+              tier: tierCode,
+              address: c.cus_address || '',
+              phone: c.cus_phone || '',
+              lat: c.cus_lat !== undefined && c.cus_lat !== null ? Number(c.cus_lat) : null,
+              lng: c.cus_lng !== undefined && c.cus_lng !== null ? Number(c.cus_lng) : null
+            };
+          });
           this.customers.set(mappedCustomers);
           if (mappedCustomers.length > 0 && !this.selectedCustomerId()) {
             this.selectedCustomerId.set(mappedCustomers[0].id);
@@ -230,6 +244,121 @@ export class NewOrderComponent implements OnInit {
 
   public onCustomerChange(newId: string): void {
     this.selectedCustomerId.set(newId);
+    this.nearestCustomerNotice.set(null);
+  }
+
+  /**
+   * Calcula la distancia geodésica en metros entre dos coordenadas geográficas
+   * utilizando la fórmula de Haversine.
+   */
+  public calculateHaversineDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number {
+    const R = 6371000; // Radio medio de la Tierra en metros
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const rLat1 = toRad(lat1);
+    const rLat2 = toRad(lat2);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(rLat1) * Math.cos(rLat2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  }
+
+  /**
+   * Formatea la distancia calculada a metros o kilómetros legibles.
+   */
+  public formatDistance(meters: number): string {
+    if (meters < 1000) {
+      return `${Math.round(meters)} m`;
+    }
+    return `${(meters / 1000).toFixed(1)} km`;
+  }
+
+  /**
+   * Consulta el GPS del dispositivo, calcula la distancia a todos los clientes
+   * con coordenadas y auto-selecciona el cliente más cercano.
+   */
+  public detectNearestCustomer(): void {
+    if (!navigator.geolocation) {
+      this.errorMessage.set('La geolocalización no está disponible en este dispositivo.');
+      return;
+    }
+
+    const customersWithCoords = this.customers().filter((c) => c.lat != null && c.lng != null);
+    if (customersWithCoords.length === 0) {
+      this.errorMessage.set(
+        'Ninguno de los clientes registrados posee coordenadas GPS asignadas.'
+      );
+      return;
+    }
+
+    this.isDetectingLocation.set(true);
+    this.errorMessage.set(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        this.isDetectingLocation.set(false);
+        const userLat = position.coords.latitude;
+        const userLng = position.coords.longitude;
+
+        // Calcular distancia para cada cliente
+        const updatedList = this.customers().map((cus) => {
+          if (cus.lat != null && cus.lng != null) {
+            const dist = this.calculateHaversineDistance(userLat, userLng, cus.lat, cus.lng);
+            return { ...cus, distanceMeters: dist };
+          }
+          return { ...cus, distanceMeters: undefined };
+        });
+
+        // Ordenar clientes: primero los que tienen distancia menor, luego los que no tienen coordenadas
+        updatedList.sort((a, b) => {
+          if (a.distanceMeters != null && b.distanceMeters != null) {
+            return a.distanceMeters - b.distanceMeters;
+          }
+          if (a.distanceMeters != null) return -1;
+          if (b.distanceMeters != null) return 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        this.customers.set(updatedList);
+
+        // El primero de la lista es el más cercano
+        const nearest = updatedList[0];
+        if (nearest && nearest.distanceMeters != null) {
+          this.selectedCustomerId.set(nearest.id);
+          this.nearestCustomerNotice.set({
+            name: nearest.name,
+            distanceFormatted: this.formatDistance(nearest.distanceMeters)
+          });
+        }
+      },
+      (error) => {
+        this.isDetectingLocation.set(false);
+        let msg = 'No se pudo obtener la posición GPS actual.';
+        if (error.code === error.PERMISSION_DENIED) {
+          msg = 'Permiso denegado para acceder a la ubicación. Habilitalo en el navegador.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          msg = 'La señal de GPS no está disponible en este momento.';
+        } else if (error.code === error.TIMEOUT) {
+          msg = 'Se agotó el tiempo de espera para obtener la ubicación GPS.';
+        }
+        this.errorMessage.set(msg);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
   }
 
   public submitOrder(): void {
@@ -337,6 +466,8 @@ export class NewOrderComponent implements OnInit {
               name: savedCus.cus_name,
               address: savedCus.cus_address,
               phone: savedCus.cus_phone || '',
+              lat: savedCus.cus_lat !== undefined && savedCus.cus_lat !== null ? Number(savedCus.cus_lat) : null,
+              lng: savedCus.cus_lng !== undefined && savedCus.cus_lng !== null ? Number(savedCus.cus_lng) : null,
               tier: this.newCustomerTier()
             };
 
