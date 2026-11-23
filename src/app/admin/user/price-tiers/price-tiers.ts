@@ -142,7 +142,9 @@ export class PriceTiers implements OnInit {
         error: (err) => {
           this.isSaving.set(false);
           console.error('Error al actualizar lista de precios:', err);
-          this.errorMessage.set(err.error?.message || 'Error al actualizar la lista de precios.');
+          this.errorMessage.set(
+            err.error?.error || err.error?.message || 'Error al actualizar la lista de precios.'
+          );
         }
       });
     } else {
@@ -156,7 +158,9 @@ export class PriceTiers implements OnInit {
         error: (err) => {
           this.isSaving.set(false);
           console.error('Error al registrar lista de precios:', err);
-          this.errorMessage.set(err.error?.message || 'Error al crear la lista de precios.');
+          this.errorMessage.set(
+            err.error?.error || err.error?.message || 'Error al crear la lista de precios.'
+          );
         }
       });
     }
@@ -179,7 +183,9 @@ export class PriceTiers implements OnInit {
       },
       error: (err) => {
         console.error('Error al marcar lista predeterminada:', err);
-        this.errorMessage.set('No se pudo establecer como predeterminada.');
+        this.errorMessage.set(
+          err.error?.error || err.error?.message || 'No se pudo establecer como predeterminada.'
+        );
       }
     });
   }
@@ -204,7 +210,9 @@ export class PriceTiers implements OnInit {
         },
         error: (err) => {
           console.error('Error al cambiar estado de lista:', err);
-          this.errorMessage.set('No se pudo modificar el estado.');
+          this.errorMessage.set(
+            err.error?.error || err.error?.message || 'No se pudo modificar el estado.'
+          );
         }
       });
   }
@@ -229,7 +237,9 @@ export class PriceTiers implements OnInit {
       error: (err) => {
         console.error('Error al eliminar lista:', err);
         this.errorMessage.set(
-          err.error?.message || 'No se pudo eliminar la lista de precios (puede tener clientes o productos asignados).'
+          err.error?.error ||
+            err.error?.message ||
+            'No se pudo eliminar la lista de precios (puede tener clientes o productos asignados).'
         );
       }
     });
