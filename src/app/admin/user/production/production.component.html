@@ -6,6 +6,19 @@
         <i class="bi bi-plus-circle-fill me-1"></i>Registrar Parte de Producción
       </h6>
 
+      @if (errorMessage()) {
+        <div class="alert alert-danger alert-dismissible fade show small py-2 mb-3" role="alert">
+          <i class="bi bi-exclamation-octagon-fill me-1"></i>
+          {{ errorMessage() }}
+          <button
+            type="button"
+            class="btn-close py-2"
+            aria-label="Cerrar"
+            (click)="errorMessage.set(null)"
+          ></button>
+        </div>
+      }
+
       @if (batchSuccessMessage()) {
         <div class="alert alert-success alert-dismissible fade show small py-2 mb-3" role="alert">
           <i class="bi bi-check-circle-fill me-1"></i>
@@ -26,11 +39,13 @@
           <select
             id="prodMachineSelect"
             class="form-select"
-            [ngModel]="selectedMachine()"
-            (ngModelChange)="selectedMachine.set($event)"
+            [ngModel]="selectedMachineUuid()"
+            (ngModelChange)="selectedMachineUuid.set($event)"
           >
-            @for (machine of machines(); track machine) {
-              <option [value]="machine">{{ machine }}</option>
+            @for (machine of machines(); track machine.mch_uuid) {
+              <option [value]="machine.mch_uuid">{{ machine.mch_name }}</option>
+            } @empty {
+              <option value="">Línea Principal</option>
             }
           </select>
         </div>
@@ -44,9 +59,9 @@
             [ngModel]="selectedProductId()"
             (ngModelChange)="selectedProductId.set($event)"
           >
-            @for (prod of products(); track prod.id) {
-              <option [value]="prod.id">
-                {{ prod.name }} (Stock: {{ prod.stock }} u.)
+            @for (prod of products(); track prod.prd_uuid) {
+              <option [value]="prod.prd_uuid">
+                {{ prod.prd_name }} (Stock: {{ prod.prd_currentstock }} u.)
               </option>
             }
           </select>
@@ -112,7 +127,12 @@
         [disabled]="!canSubmitBatch()"
         (click)="submitProductionOrder()"
       >
-        <i class="bi bi-check2-circle me-1"></i>Cerrar Lote y Sumar a Depósito
+        @if (isSubmitting()) {
+          <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+          Asentando Lote en API...
+        } @else {
+          <i class="bi bi-check2-circle me-1"></i>Cerrar Lote y Sumar a Depósito
+        }
       </button>
     </div>
   </div>
