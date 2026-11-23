@@ -31,6 +31,14 @@ export const USER_ROUTES: Routes = [
         loadComponent: () => import('./products/products').then((m) => m.Products)
       },
       {
+        path: 'price-tiers',
+        loadComponent: () => import('./price-tiers/price-tiers').then((m) => m.PriceTiers)
+      },
+      {
+        path: 'machines',
+        loadComponent: () => import('./machines/machines').then((m) => m.Machines)
+      },
+      {
         path: '',
         redirectTo: 'dashboard',
         pathMatch: 'full'
