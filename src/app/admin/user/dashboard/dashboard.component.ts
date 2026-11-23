@@ -1,10 +1,16 @@
 import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { forkJoin } from 'rxjs';
 import { CompanyContextService } from '@services/company-context';
 import { ProductService } from '@services/products';
 import { OrderService } from '@services/orders';
+import { ProductionOrderService } from '@services/production-orders';
+import { MachineService } from '@services/machines';
 import { OrderInterface, OrderStatus as BackendOrderStatus } from '@interfaces/order';
+import { ProductionOrderInterface } from '@interfaces/production-order';
+import { MachineInterface } from '@interfaces/machine';
+import { ProductInterface } from '@interfaces/product';
 
 export interface DashboardStockItem {
   id: string;
@@ -46,6 +52,8 @@ export class DashboardComponent implements OnInit {
   private readonly _companyContext = inject(CompanyContextService);
   private readonly _productService = inject(ProductService);
   private readonly _orderService = inject(OrderService);
+  private readonly _productionOrderService = inject(ProductionOrderService);
+  private readonly _machineService = inject(MachineService);
 
   readonly showProduction = this._companyContext.canProduce;
   readonly showSales = this._companyContext.hasSales;
@@ -61,24 +69,7 @@ export class DashboardComponent implements OnInit {
   readonly orders = signal<DashboardOrderItem[]>([]);
 
   // Lotes recientes de Producción
-  readonly productionLogs = signal<DashboardProductionLog[]>([
-    {
-      id: 'lot-1',
-      machine: 'Fabricadora Rolito 1',
-      productName: 'Bolsa 3 kg',
-      qty: 150,
-      waste: 3,
-      time: '08:30'
-    },
-    {
-      id: 'lot-2',
-      machine: 'Fabricadora Rolito 2',
-      productName: 'Bolsa 15 kg',
-      qty: 80,
-      waste: 1,
-      time: '10:15'
-    }
-  ]);
+  readonly productionLogs = signal<DashboardProductionLog[]>([]);
 
   // KPIs Financieros y de Despacho Reactivos
   readonly kpiTotalBags = computed<number>(() =>
@@ -174,6 +165,58 @@ export class DashboardComponent implements OnInit {
         console.warn('Error al cargar pedidos para dashboard:', err);
       }
     });
+
+    // Cargar Lotes de Producción si la empresa tiene producción activa
+    if (this.showProduction()) {
+      forkJoin({
+        orders: this._productionOrderService.getProductionOrders(cmp_uuid),
+        machines: this._machineService.getMachines(cmp_uuid),
+        products: this._productService.getProducts(cmp_uuid)
+      }).subscribe({
+        next: ({ orders, machines, products }) => {
+          const rawOrders: ProductionOrderInterface[] =
+            (orders as any)?.data || (Array.isArray(orders) ? orders : []);
+          const rawMachines: MachineInterface[] =
+            (machines as any)?.data || (Array.isArray(machines) ? machines : []);
+          const rawProducts: ProductInterface[] =
+            (products as any)?.data || (Array.isArray(products) ? products : []);
+
+          const sortedOrders = [...rawOrders].sort((a, b) => {
+            const dateA = new Date(a.prdord_productiondate || a.prdord_createdat || 0).getTime();
+            const dateB = new Date(b.prdord_productiondate || b.prdord_createdat || 0).getTime();
+            return dateB - dateA;
+          });
+
+          const logs: DashboardProductionLog[] = sortedOrders.slice(0, 5).map((ord) => {
+            const pDate = ord.prdord_productiondate
+              ? new Date(ord.prdord_productiondate)
+              : ord.prdord_createdat
+              ? new Date(ord.prdord_createdat)
+              : new Date();
+            const hours = String(pDate.getHours()).padStart(2, '0');
+            const minutes = String(pDate.getMinutes()).padStart(2, '0');
+            const time = `${hours}:${minutes}`;
+
+            const machineName =
+              rawMachines.find((m) => m.mch_uuid === ord.mch_uuid)?.mch_name || 'Línea de Envasado';
+            const productName =
+              rawProducts.find((p) => p.prd_uuid === ord.prd_uuid)?.prd_name || 'Bolsa de Hielo';
+
+            return {
+              id: ord.prdord_uuid,
+              machine: machineName,
+              productName: productName,
+              qty: Number(ord.prdord_producedqty) || 0,
+              waste: Number(ord.prdord_wasteqty) || 0,
+              time
+            };
+          });
+
+          this.productionLogs.set(logs);
+        },
+        error: (err) => console.warn('Error al cargar lotes de producción para dashboard:', err)
+      });
+    }
   }
 
   public getStatusBadgeClass(status: OrderStatus): string {
