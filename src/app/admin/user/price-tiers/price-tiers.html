@@ -1,1 +1,248 @@
-<p>price-tiers works!</p>
+<!-- Encabezado -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-dark">
+      <i class="bi bi-tag-fill text-primary me-2"></i>Listas de Precios y Aranceles
+    </h4>
+    <small class="text-muted">Configurá las categorías de precios para clientes, preventa y reparto</small>
+  </div>
+  <div>
+    <button type="button" class="btn btn-primary fw-semibold px-3 py-2" (click)="openCreateModal()">
+      <i class="bi bi-plus-circle me-1"></i>Nueva Lista de Precios
+    </button>
+  </div>
+</div>
+
+<!-- Alertas de Feedback -->
+@if (successMessage()) {
+  <div class="alert alert-success alert-dismissible fade show small py-2 mb-3" role="alert">
+    <i class="bi bi-check-circle-fill me-1"></i>
+    {{ successMessage() }}
+    <button type="button" class="btn-close py-2" aria-label="Cerrar" (click)="successMessage.set(null)"></button>
+  </div>
+}
+
+@if (errorMessage()) {
+  <div class="alert alert-danger alert-dismissible fade show small py-2 mb-3" role="alert">
+    <i class="bi bi-exclamation-octagon-fill me-1"></i>
+    {{ errorMessage() }}
+    <button type="button" class="btn-close py-2" aria-label="Cerrar" (click)="errorMessage.set(null)"></button>
+  </div>
+}
+
+<!-- Barra de Filtros -->
+<div class="ats-card p-3 mb-4">
+  <div class="row g-2 align-items-center">
+    <div class="col-12 col-md-6">
+      <div class="input-group">
+        <span class="input-group-text bg-white border-end-0 text-muted">
+          <i class="bi bi-search"></i>
+        </span>
+        <input
+          type="text"
+          class="form-control border-start-0 ps-0"
+          placeholder="Buscar lista por código, nombre o descripción..."
+          [ngModel]="searchQuery()"
+          (ngModelChange)="searchQuery.set($event)"
+        />
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla de Listas de Precios -->
+<div class="ats-card p-0 overflow-hidden mb-4">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light text-muted small text-uppercase">
+        <tr>
+          <th class="ps-3 py-3" style="width: 100px;">Código</th>
+          <th class="py-3">Nombre de Lista</th>
+          <th class="py-3">Descripción</th>
+          <th class="py-3 text-center">Predeterminada</th>
+          <th class="py-3 text-center">Estado</th>
+          <th class="pe-3 py-3 text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (tier of filteredPriceTiers(); track tier.prct_uuid) {
+          <tr>
+            <td class="ps-3">
+              <span class="badge bg-light text-dark border fw-bold font-monospace">
+                {{ tier.prct_code || 'STD' }}
+              </span>
+            </td>
+            <td>
+              <div class="fw-bold text-dark">{{ tier.prct_name }}</div>
+            </td>
+            <td>
+              <span class="text-muted small">{{ tier.prct_description || 'Sin descripción' }}</span>
+            </td>
+            <td class="text-center">
+              @if (tier.prct_isdefault) {
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                  <i class="bi bi-star-fill me-1"></i>Predeterminada
+                </span>
+              } @else {
+                <button
+                  type="button"
+                  class="btn btn-sm btn-link text-muted text-decoration-none p-0"
+                  title="Establecer como predeterminada"
+                  (click)="setDefault(tier)"
+                >
+                  <i class="bi bi-star text-secondary"></i> Marcar
+                </button>
+              }
+            </td>
+            <td class="text-center">
+              @if (tier.prct_active !== false) {
+                <span class="badge bg-success-subtle text-success">Activa</span>
+              } @else {
+                <span class="badge bg-secondary-subtle text-secondary">Inactiva</span>
+              }
+            </td>
+            <td class="pe-3 text-end">
+              <div class="btn-group btn-group-sm">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  title="Editar Lista"
+                  (click)="openEditModal(tier)"
+                >
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline-danger"
+                  [disabled]="tier.prct_isdefault"
+                  title="Eliminar Lista"
+                  (click)="deletePriceTier(tier)"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="text-center py-4 text-muted">
+              @if (isLoading()) {
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                Cargando listas de precios...
+              } @else {
+                <i class="bi bi-tags fs-4 d-block mb-1"></i>
+                No se encontraron listas de precios registradas.
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal de Alta / Edición -->
+@if (isFormOpen()) {
+  <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light">
+          <h5 class="modal-title fw-bold text-dark">
+            <i class="bi" [class.bi-plus-circle]="!isEditing()" [class.bi-pencil-square]="isEditing()"></i>
+            {{ isEditing() ? 'Editar Lista de Precios' : 'Nueva Lista de Precios' }}
+          </h5>
+          <button type="button" class="btn-close" aria-label="Cerrar" (click)="closeModal()"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <div class="row g-3 mb-3">
+            <div class="col-4">
+              <label for="tierCode" class="form-label small fw-semibold">Código</label>
+              <input
+                type="text"
+                id="tierCode"
+                class="form-control text-uppercase"
+                placeholder="Ej: MAY"
+                maxlength="10"
+                [ngModel]="formCode()"
+                (ngModelChange)="formCode.set($event)"
+              />
+            </div>
+            <div class="col-8">
+              <label for="tierName" class="form-label small fw-semibold">
+                Nombre de la Lista <span class="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                id="tierName"
+                class="form-control"
+                placeholder="Ej: Mayorista / Distribuidores"
+                [ngModel]="formName()"
+                (ngModelChange)="formName.set($event)"
+              />
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="tierDesc" class="form-label small fw-semibold">Descripción o Condiciones</label>
+            <textarea
+              id="tierDesc"
+              class="form-control"
+              rows="2"
+              placeholder="Ej: Aplicable a compras superiores a 50 bolsas o clientes con cuenta corriente"
+              [ngModel]="formDescription()"
+              (ngModelChange)="formDescription.set($event)"
+            ></textarea>
+          </div>
+
+          <div class="d-flex flex-column gap-2 p-3 bg-light rounded-3">
+            <div class="form-check form-switch mb-0">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="tierDefault"
+                [checked]="formIsDefault()"
+                (change)="formIsDefault.set(!formIsDefault())"
+              />
+              <label class="form-check-label small fw-semibold" for="tierDefault">
+                Marcar como Lista Predeterminada de la Empresa
+              </label>
+            </div>
+            <div class="form-check form-switch mb-0">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="tierActive"
+                [checked]="formActive()"
+                (change)="formActive.set(!formActive())"
+              />
+              <label class="form-check-label small fw-semibold" for="tierActive">
+                Lista Activa para Ventas y Pedidos
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-outline-secondary" (click)="closeModal()">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary fw-semibold px-4"
+            [disabled]="isSaving() || !formName().trim()"
+            (click)="savePriceTier()"
+          >
+            @if (isSaving()) {
+              <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+              Guardando...
+            } @else {
+              <i class="bi bi-check2-circle me-1"></i>
+              {{ isEditing() ? 'Actualizar' : 'Crear Lista' }}
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
