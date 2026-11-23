@@ -9,6 +9,8 @@ export interface CustomerInterface {
   cus_phone?: string | null;
   cus_contactname?: string | null;
   cus_notes?: string | null;
+  cus_lat?: number | null;
+  cus_lng?: number | null;
   cus_active: boolean;
   cus_createdat?: Date | string;
   cus_updatedat?: Date | string;
