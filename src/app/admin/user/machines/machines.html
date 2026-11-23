@@ -1,1 +1,265 @@
-<p>machines works!</p>
+<!-- Encabezado y Acciones -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-dark">
+      <i class="bi bi-cpu-fill text-primary me-2"></i>Máquinas y Líneas de Producción
+    </h4>
+    <small class="text-muted">Administrá el parque de maquinaria, líneas de envasado y capacidades diarias</small>
+  </div>
+  <div>
+    <button type="button" class="btn btn-primary fw-semibold px-3 py-2" (click)="openCreateModal()">
+      <i class="bi bi-plus-circle me-1"></i>Nueva Máquina
+    </button>
+  </div>
+</div>
+
+<!-- Tarjetas de Resumen -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-sm-6">
+    <div class="ats-card p-3 d-flex align-items-center gap-3">
+      <div class="p-3 bg-primary-subtle text-primary rounded-3">
+        <i class="bi bi-gear-wide-connected fs-3"></i>
+      </div>
+      <div>
+        <div class="text-muted small fw-semibold">Máquinas en Servicio</div>
+        <h4 class="fw-bold mb-0 text-dark">{{ totalActiveMachines() }}</h4>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-sm-6">
+    <div class="ats-card p-3 d-flex align-items-center gap-3">
+      <div class="p-3 bg-success-subtle text-success rounded-3">
+        <i class="bi bi-speedometer2 fs-3"></i>
+      </div>
+      <div>
+        <div class="text-muted small fw-semibold">Capacidad Nominal Instalada</div>
+        <h4 class="fw-bold mb-0 text-success">{{ totalNominalCapacity() }} u./día</h4>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Alertas de Feedback -->
+@if (successMessage()) {
+  <div class="alert alert-success alert-dismissible fade show small py-2 mb-3" role="alert">
+    <i class="bi bi-check-circle-fill me-1"></i>
+    {{ successMessage() }}
+    <button type="button" class="btn-close py-2" aria-label="Cerrar" (click)="successMessage.set(null)"></button>
+  </div>
+}
+
+@if (errorMessage()) {
+  <div class="alert alert-danger alert-dismissible fade show small py-2 mb-3" role="alert">
+    <i class="bi bi-exclamation-octagon-fill me-1"></i>
+    {{ errorMessage() }}
+    <button type="button" class="btn-close py-2" aria-label="Cerrar" (click)="errorMessage.set(null)"></button>
+  </div>
+}
+
+<!-- Barra de Filtros -->
+<div class="ats-card p-3 mb-4">
+  <div class="row g-2 align-items-center">
+    <div class="col-12 col-md-6">
+      <div class="input-group">
+        <span class="input-group-text bg-white border-end-0 text-muted">
+          <i class="bi bi-search"></i>
+        </span>
+        <input
+          type="text"
+          class="form-control border-start-0 ps-0"
+          placeholder="Buscar máquina por nombre o descripción..."
+          [ngModel]="searchQuery()"
+          (ngModelChange)="searchQuery.set($event)"
+        />
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla de Máquinas -->
+<div class="ats-card p-0 overflow-hidden mb-4">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light text-muted small text-uppercase">
+        <tr>
+          <th class="ps-3 py-3">Nombre de la Máquina / Línea</th>
+          <th class="py-3">Descripción / Especificaciones</th>
+          <th class="py-3 text-end">Capacidad Diaria</th>
+          <th class="py-3 text-center">Estado Operativo</th>
+          <th class="pe-3 py-3 text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (machine of filteredMachines(); track machine.mch_uuid) {
+          <tr>
+            <td class="ps-3">
+              <div class="fw-bold text-dark">{{ machine.mch_name }}</div>
+            </td>
+            <td>
+              <span class="text-muted small">{{ machine.mch_description || 'Sin notas adicionales' }}</span>
+            </td>
+            <td class="text-end">
+              @if (machine.mch_dailycapacity) {
+                <span class="badge bg-light text-dark border fs-6">
+                  {{ machine.mch_dailycapacity }} u.
+                </span>
+              } @else {
+                <span class="text-muted small fst-italic">No especificada</span>
+              }
+            </td>
+            <td class="text-center">
+              @if (machine.mch_active !== false) {
+                <span class="badge bg-success-subtle text-success">
+                  <i class="bi bi-check-circle-fill me-1"></i>En Operación
+                </span>
+              } @else {
+                <span class="badge bg-danger-subtle text-danger">
+                  <i class="bi bi-pause-circle-fill me-1"></i>Fuera de Servicio
+                </span>
+              }
+            </td>
+            <td class="pe-3 text-end">
+              <div class="btn-group btn-group-sm">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  title="Editar Máquina"
+                  (click)="openEditModal(machine)"
+                >
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  [class.btn-outline-warning]="machine.mch_active !== false"
+                  [class.btn-outline-success]="machine.mch_active === false"
+                  [title]="machine.mch_active !== false ? 'Pausar Operación' : 'Activar Operación'"
+                  (click)="toggleActive(machine)"
+                >
+                  <i class="bi" [class.bi-pause-circle]="machine.mch_active !== false" [class.bi-play-circle]="machine.mch_active === false"></i>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline-danger"
+                  title="Eliminar Máquina"
+                  (click)="deleteMachine(machine)"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5" class="text-center py-4 text-muted">
+              @if (isLoading()) {
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                Cargando parque de maquinarias...
+              } @else {
+                <i class="bi bi-cpu fs-4 d-block mb-1"></i>
+                No se encontraron máquinas registradas para la empresa.
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal de Alta / Edición -->
+@if (isFormOpen()) {
+  <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light">
+          <h5 class="modal-title fw-bold text-dark">
+            <i class="bi" [class.bi-plus-circle]="!isEditing()" [class.bi-pencil-square]="isEditing()"></i>
+            {{ isEditing() ? 'Editar Máquina o Línea' : 'Nueva Máquina o Línea' }}
+          </h5>
+          <button type="button" class="btn-close" aria-label="Cerrar" (click)="closeModal()"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label for="mchName" class="form-label small fw-semibold">
+              Nombre de la Máquina / Línea <span class="text-danger">*</span>
+            </label>
+            <input
+              type="text"
+              id="mchName"
+              class="form-control"
+              placeholder="Ej: Fabricadora Rolito N° 1 (Scotman)"
+              [ngModel]="formName()"
+              (ngModelChange)="formName.set($event)"
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="mchCap" class="form-label small fw-semibold">
+              Capacidad Nominal Diaria (Bolsas o unidades estimadas / día)
+            </label>
+            <input
+              type="number"
+              id="mchCap"
+              class="form-control"
+              min="0"
+              placeholder="Ej: 500"
+              [ngModel]="formDailyCapacity()"
+              (ngModelChange)="formDailyCapacity.set($event)"
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="mchDesc" class="form-label small fw-semibold">
+              Descripción, Modelo o Notas de Mantenimiento
+            </label>
+            <textarea
+              id="mchDesc"
+              class="form-control"
+              rows="2"
+              placeholder="Ej: Mantenimiento bimestral de filtros y bomba de agua"
+              [ngModel]="formDescription()"
+              (ngModelChange)="formDescription.set($event)"
+            ></textarea>
+          </div>
+
+          <div class="p-3 bg-light rounded-3">
+            <div class="form-check form-switch mb-0">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="mchActive"
+                [checked]="formActive()"
+                (change)="formActive.set(!formActive())"
+              />
+              <label class="form-check-label small fw-semibold" for="mchActive">
+                Máquina en Operación Activa
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-outline-secondary" (click)="closeModal()">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary fw-semibold px-4"
+            [disabled]="isSaving() || !formName().trim()"
+            (click)="saveMachine()"
+          >
+            @if (isSaving()) {
+              <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+              Guardando...
+            } @else {
+              <i class="bi bi-check2-circle me-1"></i>
+              {{ isEditing() ? 'Actualizar' : 'Registrar Máquina' }}
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
