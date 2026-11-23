@@ -248,22 +248,35 @@
           ></button>
         </div>
         <div class="modal-body">
+          @if (modalErrorMessage()) {
+            <div class="alert alert-danger py-2 small mb-3">
+              <i class="bi bi-exclamation-circle-fill me-1"></i>
+              {{ modalErrorMessage() }}
+            </div>
+          }
+
           <div class="mb-3">
-            <label class="form-label small fw-semibold">Nombre / Comercio</label>
+            <label class="form-label small fw-semibold">
+              Nombre / Comercio <span class="text-danger">*</span>
+            </label>
             <input
               type="text"
               class="form-control"
               placeholder="Ej: Kiosco Pepe"
+              [disabled]="isSavingCustomer()"
               [ngModel]="newCustomerName()"
               (ngModelChange)="newCustomerName.set($event)"
             />
           </div>
           <div class="mb-3">
-            <label class="form-label small fw-semibold">Dirección</label>
+            <label class="form-label small fw-semibold">
+              Dirección <span class="text-danger">*</span>
+            </label>
             <input
               type="text"
               class="form-control"
               placeholder="Ej: Mitre 500"
+              [disabled]="isSavingCustomer()"
               [ngModel]="newCustomerAddress()"
               (ngModelChange)="newCustomerAddress.set($event)"
             />
@@ -274,6 +287,7 @@
               type="text"
               class="form-control"
               placeholder="Ej: 2323445566"
+              [disabled]="isSavingCustomer()"
               [ngModel]="newCustomerPhone()"
               (ngModelChange)="newCustomerPhone.set($event)"
             />
@@ -282,6 +296,7 @@
             <label class="form-label small fw-semibold">Lista de Precios Inicial</label>
             <select
               class="form-select"
+              [disabled]="isSavingCustomer()"
               [ngModel]="newCustomerTier()"
               (ngModelChange)="newCustomerTier.set($event)"
             >
@@ -295,6 +310,7 @@
           <button
             type="button"
             class="btn btn-light rounded-pill"
+            [disabled]="isSavingCustomer()"
             (click)="closeQuickCustomerModal()"
           >
             Cancelar
@@ -302,9 +318,15 @@
           <button
             type="button"
             class="btn btn-primary rounded-pill px-4 fw-semibold"
+            [disabled]="!newCustomerName().trim() || !newCustomerAddress().trim() || isSavingCustomer()"
             (click)="saveQuickCustomer()"
           >
-            Guardar Cliente
+            @if (isSavingCustomer()) {
+              <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+              Guardando...
+            } @else {
+              Guardar Cliente
+            }
           </button>
         </div>
       </div>

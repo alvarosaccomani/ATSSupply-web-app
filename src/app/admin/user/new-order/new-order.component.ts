@@ -69,6 +69,8 @@ export class NewOrderComponent implements OnInit {
 
   // Modal Alta Rápida de Cliente
   readonly showQuickCustomerModal = signal<boolean>(false);
+  readonly isSavingCustomer = signal<boolean>(false);
+  readonly modalErrorMessage = signal<string | null>(null);
   readonly newCustomerName = signal<string>('');
   readonly newCustomerAddress = signal<string>('');
   readonly newCustomerPhone = signal<string>('');
@@ -275,7 +277,8 @@ export class NewOrderComponent implements OnInit {
       },
       error: (err) => {
         this.isSubmitting.set(false);
-        const msg = err.error?.message || 'Error al persistir el pedido en el servidor.';
+        const msg =
+          err.error?.error || err.error?.message || 'Error al persistir el pedido en el servidor.';
         this.errorMessage.set(msg);
       }
     });
@@ -286,54 +289,73 @@ export class NewOrderComponent implements OnInit {
     this.newCustomerAddress.set('');
     this.newCustomerPhone.set('');
     this.newCustomerTier.set('C');
+    this.modalErrorMessage.set(null);
+    this.isSavingCustomer.set(false);
     this.showQuickCustomerModal.set(true);
   }
 
   public closeQuickCustomerModal(): void {
+    if (this.isSavingCustomer()) return;
     this.showQuickCustomerModal.set(false);
+    this.modalErrorMessage.set(null);
   }
 
   public saveQuickCustomer(): void {
     const name = this.newCustomerName().trim();
-    if (!name) return;
+    const address = this.newCustomerAddress().trim();
+
+    if (!name || !address) {
+      this.modalErrorMessage.set('El nombre y la dirección son obligatorios.');
+      return;
+    }
 
     const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
-    if (!cmp_uuid) return;
+    if (!cmp_uuid) {
+      this.modalErrorMessage.set('No se encontró una empresa activa seleccionada.');
+      return;
+    }
 
-    const tempId = 'cus-' + Date.now();
-    const newCus: PosCustomer = {
-      id: tempId,
-      name: name.toUpperCase(),
-      address: this.newCustomerAddress().trim(),
-      phone: this.newCustomerPhone().trim(),
-      tier: this.newCustomerTier()
-    };
-
-    this.customers.update((list) => [newCus, ...list]);
-    this.selectedCustomerId.set(newCus.id);
-    this.closeQuickCustomerModal();
+    this.isSavingCustomer.set(true);
+    this.modalErrorMessage.set(null);
 
     // Persistir cliente en backend
     this._customerService
       .saveCustomer({
         cmp_uuid,
-        cus_name: newCus.name,
-        cus_address: newCus.address,
-        cus_phone: newCus.phone,
+        cus_name: name.toUpperCase(),
+        cus_address: address,
+        cus_phone: this.newCustomerPhone().trim(),
         cus_active: true
       })
       .subscribe({
         next: (res) => {
-          if (res?.data?.cus_uuid) {
-            this.customers.update((list) =>
-              list.map((c) => (c.id === tempId ? { ...c, id: res.data.cus_uuid } : c))
-            );
-            if (this.selectedCustomerId() === tempId) {
-              this.selectedCustomerId.set(res.data.cus_uuid);
-            }
+          this.isSavingCustomer.set(false);
+          const savedCus = res?.data;
+          if (savedCus && savedCus.cus_uuid) {
+            const newCus: PosCustomer = {
+              id: savedCus.cus_uuid,
+              name: savedCus.cus_name,
+              address: savedCus.cus_address,
+              phone: savedCus.cus_phone || '',
+              tier: this.newCustomerTier()
+            };
+
+            this.customers.update((list) => [newCus, ...list]);
+            this.selectedCustomerId.set(newCus.id);
+            this.showQuickCustomerModal.set(false);
+          } else {
+            this.modalErrorMessage.set('No se recibieron los datos del cliente creado.');
           }
         },
-        error: (err) => console.warn('Error al persistir cliente rápido:', err)
+        error: (err) => {
+          this.isSavingCustomer.set(false);
+          const msg =
+            err.error?.error ||
+            err.error?.message ||
+            'Error al persistir cliente rápido en el servidor.';
+          this.modalErrorMessage.set(msg);
+          console.warn('Error al persistir cliente rápido:', err);
+        }
       });
   }
 
