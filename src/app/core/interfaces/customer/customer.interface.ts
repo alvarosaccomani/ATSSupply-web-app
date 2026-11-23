@@ -1,3 +1,5 @@
+import { PriceTierInterface } from '@interfaces/price-tier';
+
 export interface CustomerInterface {
   cmp_uuid: string;
   cus_uuid: string;
@@ -10,4 +12,5 @@ export interface CustomerInterface {
   cus_active: boolean;
   cus_createdat?: Date | string;
   cus_updatedat?: Date | string;
+  priceTier?: Pick<PriceTierInterface, 'prct_uuid' | 'prct_code' | 'prct_name'>;
 }
