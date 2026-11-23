@@ -40,6 +40,12 @@ export class UserLayoutComponent {
   readonly showProducts = computed<boolean>(
     () => this.role() === 'OWNER' || this.role() === 'SELLER'
   );
+  readonly showPriceTiers = computed<boolean>(
+    () => this.role() === 'OWNER'
+  );
+  readonly showMachines = computed<boolean>(
+    () => this.hasProduction() && this.role() === 'OWNER'
+  );
 
   // Estado del toolbar de simulación/desarrollo
   readonly isDevToolbarOpen = signal<boolean>(false);

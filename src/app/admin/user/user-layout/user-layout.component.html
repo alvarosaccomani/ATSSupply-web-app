@@ -107,6 +107,16 @@
           <i class="bi bi-box-seam-fill"></i> Catálogo de Productos
         </a>
       }
+      @if (showPriceTiers()) {
+        <a class="sidebar-btn" routerLink="price-tiers" routerLinkActive="active">
+          <i class="bi bi-tag-fill"></i> Listas de Precios
+        </a>
+      }
+      @if (showMachines()) {
+        <a class="sidebar-btn" routerLink="machines" routerLinkActive="active">
+          <i class="bi bi-cpu-fill"></i> Máquinas y Líneas
+        </a>
+      }
     </nav>
 
     <!-- Sección de Usuario y Empresa (Base del Sidebar) -->
