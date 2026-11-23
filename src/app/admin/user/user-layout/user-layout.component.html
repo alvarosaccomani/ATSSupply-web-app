@@ -1,48 +1,68 @@
-<!-- Barra de Simulación de Feature Flags y Roles -->
-<div class="config-bar py-2 px-3">
-  <div class="container-fluid d-flex flex-wrap align-items-center justify-content-between gap-2">
-    <div class="d-flex align-items-center gap-3">
-      <span class="fw-semibold text-info"><i class="bi bi-sliders me-1"></i>Módulos Activos:</span>
-      <div class="form-check form-switch mb-0">
-        <input
-          class="form-check-input"
-          type="checkbox"
-          id="flagProduction"
-          [checked]="hasProduction()"
-          (change)="toggleProduction()"
-        />
-        <label class="form-check-label" for="flagProduction">Producción</label>
+<!-- Barra de Simulación de Feature Flags y Roles (Colapsable) -->
+@if (isDevToolbarOpen()) {
+  <div class="config-bar py-2 px-3">
+    <div class="container-fluid d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="d-flex align-items-center gap-3">
+        <span class="fw-semibold text-info"><i class="bi bi-sliders me-1"></i>Módulos Activos:</span>
+        <div class="form-check form-switch mb-0">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="flagProduction"
+            [checked]="hasProduction()"
+            (change)="toggleProduction()"
+          />
+          <label class="form-check-label" for="flagProduction">Producción</label>
+        </div>
+        <div class="form-check form-switch mb-0">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="flagSales"
+            [checked]="hasSales()"
+            (change)="toggleSales()"
+          />
+          <label class="form-check-label" for="flagSales">Preventa/Reparto</label>
+        </div>
       </div>
-      <div class="form-check form-switch mb-0">
-        <input
-          class="form-check-input"
-          type="checkbox"
-          id="flagSales"
-          [checked]="hasSales()"
-          (change)="toggleSales()"
-        />
-        <label class="form-check-label" for="flagSales">Preventa/Reparto</label>
-      </div>
-    </div>
-    <div class="d-flex align-items-center gap-3">
-      <span class="d-none d-lg-inline text-secondary"><i class="bi bi-display me-1"></i>Vista Escritorio / Tablet / Móvil</span>
-      <div class="d-flex align-items-center gap-2">
-        <span class="text-secondary">Rol:</span>
-        <select
-          id="roleSelector"
-          class="form-select form-select-sm bg-dark text-white border-secondary py-0"
-          style="width: auto;"
-          [value]="role()"
-          (change)="onRoleChange($any($event.target).value)"
+      <div class="d-flex align-items-center gap-3">
+        <span class="d-none d-lg-inline text-secondary"><i class="bi bi-display me-1"></i>Simulador de Rol:</span>
+        <div class="d-flex align-items-center gap-2">
+          <select
+            id="roleSelector"
+            class="form-select form-select-sm bg-dark text-white border-secondary py-0"
+            style="width: auto;"
+            [value]="role()"
+            (change)="onRoleChange($any($event.target).value)"
+          >
+            <option value="OWNER">Dueño / Admin</option>
+            <option value="SELLER">Vendedor (Calle)</option>
+            <option value="DRIVER">Repartidor (Camioneta)</option>
+          </select>
+        </div>
+        <button
+          type="button"
+          class="btn btn-outline-light btn-sm py-0 px-2"
+          style="font-size: 0.72rem;"
+          (click)="toggleDevToolbar()"
         >
-          <option value="OWNER">Dueño / Admin</option>
-          <option value="SELLER">Vendedor (Calle)</option>
-          <option value="DRIVER">Repartidor (Camioneta)</option>
-        </select>
+          <i class="bi bi-chevron-up me-1"></i>Ocultar
+        </button>
       </div>
     </div>
   </div>
-</div>
+} @else {
+  <div class="dev-toolbar-collapsed d-flex justify-content-end px-3 py-1">
+    <button
+      type="button"
+      class="btn btn-link text-muted p-0 text-decoration-none"
+      style="font-size: 0.7rem;"
+      (click)="toggleDevToolbar()"
+    >
+      <i class="bi bi-sliders me-1"></i>Simulador de Roles
+    </button>
+  </div>
+}
 
 <div class="app-shell">
   <!-- SIDEBAR FIJO (TABLET Y PC >= 768px) -->
@@ -57,6 +77,7 @@
       </div>
     </div>
 
+    <!-- Navegación Principal -->
     <nav class="sidebar-nav">
       <a class="sidebar-btn" routerLink="dashboard" routerLinkActive="active">
         <i class="bi bi-grid-1x2-fill"></i> Tablero y Depósito
@@ -88,9 +109,51 @@
       }
     </nav>
 
-    <div class="p-3 border-top border-white border-opacity-10 small text-white-50">
-      <div class="fw-semibold text-white">{{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }}</div>
-      <div>Depósito Central • SSO Activo</div>
+    <!-- Sección de Usuario y Empresa (Base del Sidebar) -->
+    <div class="sidebar-user-section p-3 border-top border-white border-opacity-10 mt-auto">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <div class="user-avatar-circle">
+          {{ userInitials() }}
+        </div>
+        <div class="text-truncate flex-grow-1">
+          <div class="fw-semibold text-white text-truncate" style="font-size: 0.85rem;">
+            {{ userName() }}
+          </div>
+          <small class="text-white-50 d-block" style="font-size: 0.7rem;">
+            {{ roleLabel() }}
+          </small>
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm btn-link text-white-50 p-1 logout-btn"
+          title="Cerrar Sesión"
+          (click)="onLogout()"
+        >
+          <i class="bi bi-box-arrow-right fs-5"></i>
+        </button>
+      </div>
+
+      <!-- Selector de Empresa si pertenece a más de una -->
+      @if (companies().length > 1) {
+        <div class="mt-2">
+          <label class="text-white-50 mb-1" style="font-size: 0.68rem;">Empresa Activa:</label>
+          <select
+            class="form-select form-select-sm bg-dark text-white border-secondary py-1"
+            style="font-size: 0.75rem;"
+            [value]="activeCompany()?.cmp_uuid"
+            (change)="onCompanyChange($any($event.target).value)"
+          >
+            @for (cmp of companies(); track cmp.cmp_uuid) {
+              <option [value]="cmp.cmp_uuid">{{ cmp.cmp_name }}</option>
+            }
+          </select>
+        </div>
+      } @else {
+        <div class="text-white-50 mt-1 d-flex align-items-center gap-1" style="font-size: 0.72rem;">
+          <i class="bi bi-building"></i>
+          <span class="text-white">{{ activeCompany()?.cmp_name || 'Alvi Hielo' }}</span>
+        </div>
+      }
     </div>
   </aside>
 
@@ -102,22 +165,71 @@
         <i class="bi bi-box-seam-fill fs-5 text-info"></i>
         <div>
           <div class="fw-bold lh-1">ATSSupply</div>
-          <small class="text-white-50" style="font-size: 0.7rem;">{{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }} • Depósito</small>
+          <small class="text-white-50" style="font-size: 0.7rem;">
+            {{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }}
+          </small>
         </div>
       </div>
-      <span class="badge bg-light text-dark fw-semibold">{{ roleLabel() }}</span>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-light text-dark fw-semibold" style="font-size: 0.7rem;">
+          {{ roleLabel() }}
+        </span>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-light py-0 px-2"
+          title="Cerrar Sesión"
+          (click)="onLogout()"
+        >
+          <i class="bi bi-box-arrow-right"></i>
+        </button>
+      </div>
     </header>
 
     <!-- Header Tablet / PC (>= 768px) -->
     <header class="desktop-topbar d-none d-md-flex align-items-center justify-content-between">
       <div>
-        <h5 class="fw-bold mb-0">Tablero Operativo y Depósito</h5>
-        <small class="text-muted">Compañía: <strong>{{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }}</strong> • Sincronizado con ATS Core</small>
+        <h5 class="fw-bold mb-0 text-dark">ATS Supply Suite</h5>
+        <small class="text-muted">
+          Empresa: <strong class="text-primary">{{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }}</strong>
+          • Rol: <span class="badge bg-light text-dark border">{{ roleLabel() }}</span>
+        </small>
       </div>
+
       <div class="d-flex align-items-center gap-3">
-        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
-          Rol: {{ roleLabel() }}
-        </span>
+        <!-- Selector rápido de empresa en desktop si tiene varias -->
+        @if (companies().length > 1) {
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">Cambiar Empresa:</span>
+            <select
+              class="form-select form-select-sm"
+              style="width: auto; font-size: 0.8rem;"
+              [value]="activeCompany()?.cmp_uuid"
+              (change)="onCompanyChange($any($event.target).value)"
+            >
+              @for (cmp of companies(); track cmp.cmp_uuid) {
+                <option [value]="cmp.cmp_uuid">{{ cmp.cmp_name }}</option>
+              }
+            </select>
+          </div>
+        }
+
+        <div class="d-flex align-items-center gap-2 ps-3 border-start">
+          <div class="user-avatar-circle small-avatar">
+            {{ userInitials() }}
+          </div>
+          <div class="text-end d-none d-lg-block">
+            <div class="fw-semibold text-dark small lh-1">{{ userName() }}</div>
+            <small class="text-muted" style="font-size: 0.7rem;">{{ currentUser()?.usr_email || '' }}</small>
+          </div>
+          <button
+            type="button"
+            class="btn btn-outline-danger btn-sm ms-2"
+            title="Cerrar Sesión"
+            (click)="onLogout()"
+          >
+            <i class="bi bi-box-arrow-right me-1"></i>Salir
+          </button>
+        </div>
       </div>
     </header>
 
