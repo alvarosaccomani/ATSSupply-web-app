@@ -1,9 +1,156 @@
+<!-- Header y Acciones de Cámara -->
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h6 class="fw-bold mb-0 text-uppercase text-muted" style="font-size: 0.8rem; letter-spacing: 0.5px;">
     <i class="bi bi-snow2 me-1 text-primary"></i>Stock Actual en Cámara / Depósito
   </h6>
+  @if (showProduction()) {
+    <a routerLink="../production" class="btn btn-sm btn-primary fw-semibold rounded-pill px-3">
+      <i class="bi bi-gear-wide-connected me-1"></i>Registrar Producción
+    </a>
+  }
 </div>
-<div class="ats-card p-4 text-center text-muted">
-  <i class="bi bi-grid-1x2-fill fs-1 text-primary d-block mb-2"></i>
-  <p class="mb-0 fw-semibold">Tablero y Depósito</p>
+
+<!-- Grilla de Stock (Móvil: 2x2 col-6, Tablet/Desktop: col-md-3) -->
+<div class="row g-3 mb-4">
+  @for (item of stockItems(); track item.id) {
+    <div class="col-6 col-md-3">
+      <div
+        class="ats-card stock-card p-3 h-100"
+        [class.low-stock]="item.stock <= item.minStock"
+      >
+        <div class="d-flex justify-content-between align-items-start">
+          <span class="fw-semibold text-muted small">{{ item.name }}</span>
+          @if (item.stock <= item.minStock) {
+            <span class="badge bg-danger" style="font-size: 0.65rem;">Bajo</span>
+          } @else {
+            <i class="bi bi-box text-info"></i>
+          }
+        </div>
+        <div
+          class="fw-bold fs-3 mt-1"
+          [class.text-danger]="item.stock <= item.minStock"
+          [class.text-dark]="item.stock > item.minStock"
+        >
+          {{ item.stock }} <small class="fs-6 fw-normal text-muted">u.</small>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+
+<!-- KPIs de Caja y Cierre Diario (Solo visible si el módulo de ventas está activo) -->
+@if (showSales()) {
+  <div class="ats-card p-3 p-lg-4 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <span class="fw-bold">
+        <i class="bi bi-cash-coin me-2 text-success"></i>Resumen Financiero y Cierre Diario
+      </span>
+      <span class="badge bg-light text-secondary border">Jornada Actual</span>
+    </div>
+    <div class="row g-3 text-center">
+      <div class="col-4">
+        <div class="p-3 rounded-3 bg-light">
+          <small class="text-muted d-block">Unidades Vendidas</small>
+          <span class="fw-bold fs-4 text-dark">{{ kpiTotalBags() }}</span>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="p-3 rounded-3" style="background: #dcfce7;">
+          <small class="text-success d-block">Caja Cobrada (Pagado)</small>
+          <span class="fw-bold fs-4 text-success">{{ formatMoney(kpiPaidAmount()) }}</span>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="p-3 rounded-3" style="background: #fee2e2;">
+          <small class="text-danger d-block">Pendiente / Cta. Cte.</small>
+          <span class="fw-bold fs-4 text-danger">{{ formatMoney(kpiPendingAmount()) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Distribución a Dos Columnas: Pedidos del Día y Últimos Lotes de Producción -->
+<div class="row g-4">
+  <!-- Pedidos del Día -->
+  <div [class]="showProduction() ? 'col-12 col-lg-8' : 'col-12'">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="fw-bold mb-0 text-uppercase text-muted" style="font-size: 0.8rem;">Pedidos del Día</h6>
+      @if (showSales()) {
+        <a routerLink="../new-order" class="btn btn-sm btn-primary rounded-pill px-3">
+          + Nuevo Pedido
+        </a>
+      }
+    </div>
+    <div class="d-flex flex-column gap-2">
+      @for (order of orders(); track order.id) {
+        <div class="ats-card p-3">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <span class="fw-bold">{{ order.customerName }}</span>
+              <span class="tier-badge ms-1" [ngClass]="'tier-' + order.customerTier">
+                Cat {{ order.customerTier }}
+              </span>
+              <div class="text-muted small">
+                <i class="bi bi-geo-alt me-1"></i>{{ order.address }} •
+                <strong class="text-dark">{{ order.itemsSummary }}</strong>
+              </div>
+            </div>
+            <div class="d-flex align-items-center gap-3 ms-auto">
+              <span class="fw-bold fs-6 text-primary">{{ formatMoney(order.total) }}</span>
+              <select
+                class="form-select form-select-sm w-auto fw-semibold"
+                style="font-size: 0.74rem;"
+                [ngClass]="getStatusBadgeClass(order.status)"
+                [ngModel]="order.status"
+                (ngModelChange)="changeOrderStatus(order.id, $event)"
+              >
+                <option value="PENDIENTE DE ENTREGA">PENDIENTE ENTREGA</option>
+                <option value="PAGADO">PAGADO</option>
+                <option value="ENTREGADO DEBE">ENTREGADO DEBE</option>
+                <option value="CUENTA CORRIENTE">CUENTA CORRIENTE</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      } @empty {
+        <div class="ats-card p-4 text-center text-muted">
+          <i class="bi bi-inbox fs-2 d-block mb-1"></i>
+          <span>No hay pedidos registrados para la jornada.</span>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Últimos Lotes Producidos (Visible si producción está activa) -->
+  @if (showProduction()) {
+    <div class="col-12 col-lg-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="fw-bold mb-0 text-uppercase text-muted" style="font-size: 0.8rem;">
+          Últimos Lotes Producidos
+        </h6>
+      </div>
+      <div class="d-flex flex-column gap-2">
+        @for (log of productionLogs(); track log.id) {
+          <div class="ats-card p-3 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="fw-semibold small">
+                {{ log.productName }}
+                <span class="text-success fw-bold">(+{{ log.qty }})</span>
+              </div>
+              <small class="text-muted" style="font-size: 0.74rem;">
+                {{ log.machine }} • Merma: {{ log.waste }} u.
+              </small>
+            </div>
+            <span class="badge bg-light text-dark border">{{ log.time }} hs</span>
+          </div>
+        } @empty {
+          <div class="ats-card p-4 text-center text-muted">
+            <i class="bi bi-clock-history fs-2 d-block mb-1"></i>
+            <span>Sin registros de producción recientes.</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
 </div>
