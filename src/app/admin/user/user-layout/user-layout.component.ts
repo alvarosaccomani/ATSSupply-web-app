@@ -1,8 +1,7 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-
-export type UserRole = 'OWNER' | 'SELLER' | 'DRIVER';
+import { CompanyContextService, UserRole } from '@services/company-context';
 
 @Component({
   selector: 'app-user-layout',
@@ -12,34 +11,30 @@ export type UserRole = 'OWNER' | 'SELLER' | 'DRIVER';
   styleUrl: './user-layout.component.scss'
 })
 export class UserLayoutComponent {
-  // Feature flags simuladas
-  readonly hasProduction = signal<boolean>(true);
-  readonly hasSales = signal<boolean>(true);
-  readonly role = signal<UserRole>('OWNER');
+  readonly companyContext = inject(CompanyContextService);
 
-  readonly roleLabel = computed<string>(() => {
-    const labels: Record<UserRole, string> = {
-      OWNER: 'Dueño / Admin',
-      SELLER: 'Vendedor (Calle)',
-      DRIVER: 'Repartidor (Camioneta)'
-    };
-    return labels[this.role()];
-  });
+  readonly hasProduction = this.companyContext.hasProduction;
+  readonly hasSales = this.companyContext.hasSales;
+  readonly role = this.companyContext.activeRole;
+  readonly roleLabel = this.companyContext.roleLabel;
+  readonly activeCompany = this.companyContext.activeCompany;
 
-  readonly showProduction = computed<boolean>(() => this.hasProduction() && this.role() === 'OWNER');
-  readonly showOrders = computed<boolean>(() => this.hasSales() && (this.role() === 'OWNER' || this.role() === 'SELLER'));
-  readonly showDelivery = computed<boolean>(() => this.hasSales() && (this.role() === 'OWNER' || this.role() === 'DRIVER'));
-  readonly showCustomers = computed<boolean>(() => this.hasSales() && (this.role() === 'OWNER' || this.role() === 'SELLER'));
+  readonly showProduction = this.companyContext.canProduce;
+  readonly showOrders = this.companyContext.canTakeOrders;
+  readonly showDelivery = this.companyContext.canDeliver;
+  readonly showCustomers = computed<boolean>(
+    () => this.hasSales() && (this.role() === 'OWNER' || this.role() === 'SELLER')
+  );
 
   onRoleChange(newRole: string): void {
-    this.role.set(newRole as UserRole);
+    this.companyContext.setActiveRole(newRole as UserRole);
   }
 
   toggleProduction(): void {
-    this.hasProduction.update((val) => !val);
+    this.companyContext.toggleProduction();
   }
 
   toggleSales(): void {
-    this.hasSales.update((val) => !val);
+    this.companyContext.toggleSales();
   }
 }

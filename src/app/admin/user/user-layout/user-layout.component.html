@@ -84,7 +84,7 @@
     </nav>
 
     <div class="p-3 border-top border-white border-opacity-10 small text-white-50">
-      <div class="fw-semibold text-white">Alvi Hielo</div>
+      <div class="fw-semibold text-white">{{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }}</div>
       <div>Depósito Central • SSO Activo</div>
     </div>
   </aside>
@@ -97,7 +97,7 @@
         <i class="bi bi-box-seam-fill fs-5 text-info"></i>
         <div>
           <div class="fw-bold lh-1">ATSSupply</div>
-          <small class="text-white-50" style="font-size: 0.7rem;">Alvi Hielo • Depósito</small>
+          <small class="text-white-50" style="font-size: 0.7rem;">{{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }} • Depósito</small>
         </div>
       </div>
       <span class="badge bg-light text-dark fw-semibold">{{ roleLabel() }}</span>
@@ -107,7 +107,7 @@
     <header class="desktop-topbar d-none d-md-flex align-items-center justify-content-between">
       <div>
         <h5 class="fw-bold mb-0">Tablero Operativo y Depósito</h5>
-        <small class="text-muted">Compañía: <strong>Alvi Hielo</strong> • Sincronizado con ATS Core</small>
+        <small class="text-muted">Compañía: <strong>{{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }}</strong> • Sincronizado con ATS Core</small>
       </div>
       <div class="d-flex align-items-center gap-3">
         <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
