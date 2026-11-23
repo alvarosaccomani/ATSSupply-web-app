@@ -248,7 +248,9 @@ export class Products implements OnInit {
         error: (err) => {
           this.isSaving.set(false);
           console.error('Error al actualizar producto:', err);
-          this.errorMessage.set(err.error?.message || 'Error al actualizar el producto.');
+          this.errorMessage.set(
+            err.error?.error || err.error?.message || 'Error al actualizar el producto.'
+          );
         }
       });
     } else {
@@ -262,7 +264,9 @@ export class Products implements OnInit {
         error: (err) => {
           this.isSaving.set(false);
           console.error('Error al dar de alta producto:', err);
-          this.errorMessage.set(err.error?.message || 'Error al dar de alta el producto.');
+          this.errorMessage.set(
+            err.error?.error || err.error?.message || 'Error al dar de alta el producto.'
+          );
         }
       });
     }
@@ -288,7 +292,9 @@ export class Products implements OnInit {
         },
         error: (err) => {
           console.error('Error al cambiar estado de producto:', err);
-          this.errorMessage.set('No se pudo actualizar el estado del producto.');
+          this.errorMessage.set(
+            err.error?.error || err.error?.message || 'No se pudo actualizar el estado del producto.'
+          );
         }
       });
   }
@@ -308,7 +314,9 @@ export class Products implements OnInit {
       error: (err) => {
         console.error('Error al eliminar producto:', err);
         this.errorMessage.set(
-          err.error?.message || 'No se pudo eliminar el producto (puede contener registros asociados).'
+          err.error?.error ||
+            err.error?.message ||
+            'No se pudo eliminar el producto (puede contener registros asociados).'
         );
       }
     });
