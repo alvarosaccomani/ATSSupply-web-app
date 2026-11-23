@@ -3,7 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { CustomerService } from '@services/customers';
+import { PriceTierService } from '@services/price-tiers';
 import { CompanyContextService } from '@services/company-context';
+import { PriceTierInterface } from '@interfaces/price-tier';
 
 export type CustomerTierCode = 'A' | 'B' | 'C';
 
@@ -24,10 +26,12 @@ export interface CustomerViewItem {
 })
 export class CustomersComponent implements OnInit {
   private readonly _customerService = inject(CustomerService);
+  private readonly _priceTierService = inject(PriceTierService);
   private readonly _companyContext = inject(CompanyContextService);
 
   // Lista de clientes conectada a la API
   readonly customers = signal<CustomerViewItem[]>([]);
+  readonly priceTiers = signal<PriceTierInterface[]>([]);
   readonly isLoading = signal<boolean>(false);
   readonly errorMessage = signal<string | null>(null);
 
@@ -68,12 +72,30 @@ export class CustomersComponent implements OnInit {
       const comp = this._companyContext.activeCompany();
       if (comp?.cmp_uuid) {
         this.loadCustomers();
+        this.loadPriceTiers(comp.cmp_uuid);
       }
     });
   }
 
   public ngOnInit(): void {
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
     this.loadCustomers();
+    if (cmp_uuid) {
+      this.loadPriceTiers(cmp_uuid);
+    }
+  }
+
+  public loadPriceTiers(cmp_uuid: string): void {
+    this._priceTierService.getPriceTiers(cmp_uuid).subscribe({
+      next: (res) => {
+        if (res?.data && Array.isArray(res.data)) {
+          this.priceTiers.set(res.data);
+        }
+      },
+      error: (err) => {
+        console.warn('No se pudieron cargar las listas de precios:', err);
+      }
+    });
   }
 
   public loadCustomers(): void {
@@ -89,13 +111,20 @@ export class CustomersComponent implements OnInit {
       next: (res) => {
         this.isLoading.set(false);
         if (res?.data && Array.isArray(res.data)) {
-          const mapped: CustomerViewItem[] = res.data.map((c) => ({
-            id: c.cus_uuid,
-            name: c.cus_name,
-            tier: 'C',
-            address: c.cus_address || '',
-            phone: c.cus_phone || ''
-          }));
+          const mapped: CustomerViewItem[] = res.data.map((c) => {
+            const rawTier = (c.priceTier?.prct_code || 'C').toUpperCase();
+            const tierCode: CustomerTierCode = ['A', 'B', 'C'].includes(rawTier)
+              ? (rawTier as CustomerTierCode)
+              : 'C';
+
+            return {
+              id: c.cus_uuid,
+              name: c.cus_name,
+              tier: tierCode,
+              address: c.cus_address || '',
+              phone: c.cus_phone || ''
+            };
+          });
           this.customers.set(mapped);
         }
       },
@@ -134,13 +163,19 @@ export class CustomersComponent implements OnInit {
       return;
     }
 
+    const selectedTierCode = this.newCustomerTier();
+    const matchingTier = this.priceTiers().find(
+      (t) => t.prct_code?.toUpperCase() === selectedTierCode
+    );
+    const prct_uuid = matchingTier?.prct_uuid;
+
     const tempId = 'cus-' + Date.now();
     const newCus: CustomerViewItem = {
       id: tempId,
       name: name.toUpperCase(),
       address: this.newCustomerAddress().trim(),
       phone: this.newCustomerPhone().trim(),
-      tier: this.newCustomerTier()
+      tier: selectedTierCode
     };
 
     // Actualización optimista en memoria
@@ -151,6 +186,7 @@ export class CustomersComponent implements OnInit {
     this._customerService
       .saveCustomer({
         cmp_uuid,
+        prct_uuid,
         cus_name: newCus.name,
         cus_address: newCus.address,
         cus_phone: newCus.phone,

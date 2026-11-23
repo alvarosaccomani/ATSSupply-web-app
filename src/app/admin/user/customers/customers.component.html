@@ -171,9 +171,15 @@
               [ngModel]="newCustomerTier()"
               (ngModelChange)="newCustomerTier.set($event)"
             >
-              <option value="A">Lista A (Mayorista)</option>
-              <option value="B">Lista B (Comercio)</option>
-              <option value="C">Lista C (Minorista / Kiosco)</option>
+              @if (priceTiers().length > 0) {
+                @for (tier of priceTiers(); track tier.prct_uuid) {
+                  <option [value]="tier.prct_code">Lista {{ tier.prct_code }} ({{ tier.prct_name }})</option>
+                }
+              } @else {
+                <option value="A">Lista A (Mayorista)</option>
+                <option value="B">Lista B (Comercio)</option>
+                <option value="C">Lista C (Minorista / Kiosco)</option>
+              }
             </select>
           </div>
         </div>
