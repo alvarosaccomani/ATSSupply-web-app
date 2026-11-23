@@ -1,4 +1,11 @@
+import { ProductPriceInterface } from '../product-price/product-price.interface';
+import { PriceTierInterface } from '../price-tier/price-tier.interface';
+
 export type ProductType = 'FINISHED' | 'SUPPLY';
+
+export interface ProductPriceWithTier extends ProductPriceInterface {
+  priceTier?: PriceTierInterface;
+}
 
 export interface ProductInterface {
   cmp_uuid: string;
@@ -13,4 +20,5 @@ export interface ProductInterface {
   prd_active: boolean;
   prd_createdat?: Date | string;
   prd_updatedat?: Date | string;
+  prices?: ProductPriceWithTier[];
 }
