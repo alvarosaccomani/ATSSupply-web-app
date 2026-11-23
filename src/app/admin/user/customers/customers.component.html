@@ -1,4 +1,180 @@
-<div class="ats-card p-4 text-center text-muted">
-  <i class="bi bi-people-fill fs-1 text-primary d-block mb-2"></i>
-  <p class="mb-0 fw-semibold">Agenda de Clientes y Listas de Precios</p>
+<!-- Barra Superior: Buscador y Alta de Clientes -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div class="input-group" style="max-width: 420px;">
+    <span class="input-group-text bg-white border-end-0">
+      <i class="bi bi-search text-muted"></i>
+    </span>
+    <input
+      type="text"
+      class="form-control border-start-0 ps-0"
+      placeholder="Buscar por nombre, dirección o teléfono..."
+      [ngModel]="searchQuery()"
+      (ngModelChange)="searchQuery.set($event)"
+    />
+  </div>
+
+  <div class="d-flex align-items-center gap-2">
+    <!-- Píldoras de resumen de listas de precios -->
+    <div class="d-none d-md-flex align-items-center gap-1 me-2 small text-muted">
+      <span class="tier-badge tier-A">A: {{ tierStats().tierA }}</span>
+      <span class="tier-badge tier-B">B: {{ tierStats().tierB }}</span>
+      <span class="tier-badge tier-C">C: {{ tierStats().tierC }}</span>
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-primary rounded-pill px-4 fw-semibold"
+      (click)="openQuickCustomerModal()"
+    >
+      <i class="bi bi-person-plus-fill me-1"></i>+ Nuevo Cliente
+    </button>
+  </div>
 </div>
+
+<!-- Grilla de Tarjetas de Clientes -->
+<div class="row g-3">
+  @for (c of filteredCustomers(); track c.id) {
+    <div class="col-12 col-md-6 col-lg-4">
+      <div class="ats-card p-3 d-flex flex-column justify-content-between h-100">
+        <div>
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <span class="fw-bold text-dark">{{ c.name }}</span>
+            <span class="tier-badge ms-1" [ngClass]="'tier-' + c.tier">
+              Cat {{ c.tier }}
+            </span>
+          </div>
+
+          <div class="text-muted small mb-2">
+            <i class="bi bi-geo-alt-fill text-danger me-1"></i>
+            {{ c.address || 'Sin dirección registrada' }}
+          </div>
+
+          @if (c.phone) {
+            <div class="text-muted small mb-3">
+              <i class="bi bi-telephone-fill text-success me-1"></i>{{ c.phone }}
+            </div>
+          }
+        </div>
+
+        <!-- Acciones Rápidas -->
+        <div class="d-flex justify-content-between align-items-center pt-2 border-top mt-auto">
+          <div>
+            @if (c.phone) {
+              <a
+                [href]="getWhatsAppUrl(c.phone)"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-sm btn-outline-success rounded-pill px-3 fw-semibold"
+                title="Contactar por WhatsApp"
+              >
+                <i class="bi bi-whatsapp me-1"></i>WhatsApp
+              </a>
+            }
+          </div>
+
+          <a
+            routerLink="../new-order"
+            class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
+            title="Iniciar pedido para este cliente"
+          >
+            <i class="bi bi-cart-plus me-1"></i>+ Pedido
+          </a>
+        </div>
+      </div>
+    </div>
+  } @empty {
+    <div class="col-12">
+      <div class="ats-card p-4 text-center text-muted">
+        <i class="bi bi-people fs-1 d-block mb-2"></i>
+        <p class="mb-0">No se encontraron clientes que coincidan con la búsqueda "{{ searchQuery() }}".</p>
+      </div>
+    </div>
+  }
+</div>
+
+<!-- Modal Alta Rápida de Cliente -->
+@if (showQuickCustomerModal()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content ats-card border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-person-plus-fill text-primary me-2"></i>Nuevo Cliente
+          </h5>
+          <button
+            type="button"
+            class="btn-close"
+            aria-label="Cerrar"
+            (click)="closeQuickCustomerModal()"
+          ></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="newCusName" class="form-label small fw-semibold">Nombre / Comercio</label>
+            <input
+              type="text"
+              id="newCusName"
+              class="form-control"
+              placeholder="Ej: KIOSCO LOS HERMANOS"
+              [ngModel]="newCustomerName()"
+              (ngModelChange)="newCustomerName.set($event)"
+            />
+          </div>
+          <div class="mb-3">
+            <label for="newCusAddress" class="form-label small fw-semibold">Dirección</label>
+            <input
+              type="text"
+              id="newCusAddress"
+              class="form-control"
+              placeholder="Ej: Rivadavia 850"
+              [ngModel]="newCustomerAddress()"
+              (ngModelChange)="newCustomerAddress.set($event)"
+            />
+          </div>
+          <div class="mb-3">
+            <label for="newCusPhone" class="form-label small fw-semibold">Teléfono / WhatsApp</label>
+            <input
+              type="text"
+              id="newCusPhone"
+              class="form-control"
+              placeholder="Ej: 2323-559988"
+              [ngModel]="newCustomerPhone()"
+              (ngModelChange)="newCustomerPhone.set($event)"
+            />
+          </div>
+          <div class="mb-2">
+            <label for="newCusTier" class="form-label small fw-semibold">Categoría / Lista de Precios</label>
+            <select
+              id="newCusTier"
+              class="form-select"
+              [ngModel]="newCustomerTier()"
+              (ngModelChange)="newCustomerTier.set($event)"
+            >
+              <option value="A">Lista A (Mayorista)</option>
+              <option value="B">Lista B (Comercio)</option>
+              <option value="C">Lista C (Minorista / Kiosco)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button
+            type="button"
+            class="btn btn-outline-secondary"
+            (click)="closeQuickCustomerModal()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary fw-semibold"
+            [disabled]="!newCustomerName().trim()"
+            (click)="saveQuickCustomer()"
+          >
+            Guardar Cliente
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
