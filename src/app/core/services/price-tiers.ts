@@ -56,4 +56,60 @@ export class PriceTierService {
       { headers }
     );
   }
+
+  /**
+   * Registra una nueva lista de precios para la empresa.
+   */
+  public savePriceTier(
+    priceTier: Partial<PriceTierInterface>
+  ): Observable<PriceTierSingleResultInterface> {
+    const headers = new HttpHeaders().set('content-type', 'application/json');
+    return this._http.post<PriceTierSingleResultInterface>(
+      `${environment.apiUrl}price-tier`,
+      priceTier,
+      { headers }
+    );
+  }
+
+  /**
+   * Actualiza los datos de una lista de precios existente.
+   */
+  public updatePriceTier(
+    cmp_uuid: string,
+    prct_uuid: string,
+    priceTier: Partial<PriceTierInterface>
+  ): Observable<PriceTierSingleResultInterface> {
+    const headers = new HttpHeaders().set('content-type', 'application/json');
+    return this._http.put<PriceTierSingleResultInterface>(
+      `${environment.apiUrl}price-tier/${cmp_uuid}/${prct_uuid}`,
+      priceTier,
+      { headers }
+    );
+  }
+
+  /**
+   * Elimina una lista de precios por su UUID.
+   */
+  public deletePriceTier(cmp_uuid: string, prct_uuid: string): Observable<any> {
+    const headers = new HttpHeaders().set('content-type', 'application/json');
+    return this._http.delete<any>(
+      `${environment.apiUrl}price-tier/${cmp_uuid}/${prct_uuid}`,
+      { headers }
+    );
+  }
+
+  /**
+   * Establece una lista de precios como la predeterminada de la empresa.
+   */
+  public setDefaultPriceTier(
+    cmp_uuid: string,
+    prct_uuid: string
+  ): Observable<PriceTierSingleResultInterface> {
+    const headers = new HttpHeaders().set('content-type', 'application/json');
+    return this._http.patch<PriceTierSingleResultInterface>(
+      `${environment.apiUrl}price-tier/${cmp_uuid}/${prct_uuid}/default`,
+      {},
+      { headers }
+    );
+  }
 }
