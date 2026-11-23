@@ -195,7 +195,11 @@ export class DeliveryComponent implements OnInit {
               )
             );
           }
-          this.errorMessage.set('No se pudo guardar el cambio de estado en el servidor.');
+          const msg =
+            err.error?.error ||
+            err.error?.message ||
+            'No se pudo guardar el cambio de estado en el servidor.';
+          this.errorMessage.set(msg);
         }
       });
   }
