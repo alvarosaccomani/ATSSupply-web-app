@@ -1,1 +1,414 @@
-<p>products works!</p>
+<!-- Encabezado y KPIs -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-dark">
+      <i class="bi bi-box-seam-fill text-primary me-2"></i>Catálogo de Productos e Insumos
+    </h4>
+    <small class="text-muted">Administración centralizada de artículos, stock crítico y listas de precios</small>
+  </div>
+  <div>
+    <button type="button" class="btn btn-primary fw-semibold px-3 py-2" (click)="openCreateModal()">
+      <i class="bi bi-plus-circle me-1"></i>Nuevo Producto
+    </button>
+  </div>
+</div>
+
+<!-- Tarjetas de Resumen (KPIs) -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-sm-4">
+    <div class="ats-card p-3 d-flex align-items-center gap-3">
+      <div class="p-3 bg-primary-subtle text-primary rounded-3">
+        <i class="bi bi-box-seam fs-3"></i>
+      </div>
+      <div>
+        <div class="text-muted small fw-semibold">Productos Terminados</div>
+        <h4 class="fw-bold mb-0 text-dark">{{ totalFinished() }}</h4>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-sm-4">
+    <div class="ats-card p-3 d-flex align-items-center gap-3">
+      <div class="p-3 bg-info-subtle text-info rounded-3">
+        <i class="bi bi-recycle fs-3"></i>
+      </div>
+      <div>
+        <div class="text-muted small fw-semibold">Insumos / Materias Primas</div>
+        <h4 class="fw-bold mb-0 text-dark">{{ totalSupplies() }}</h4>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-sm-4">
+    <div class="ats-card p-3 d-flex align-items-center gap-3">
+      <div class="p-3 bg-danger-subtle text-danger rounded-3">
+        <i class="bi bi-exclamation-triangle fs-3"></i>
+      </div>
+      <div>
+        <div class="text-muted small fw-semibold">En Stock Crítico</div>
+        <h4 class="fw-bold mb-0 text-danger">{{ totalLowStock() }}</h4>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Alertas de Feedback -->
+@if (successMessage()) {
+  <div class="alert alert-success alert-dismissible fade show small py-2 mb-3" role="alert">
+    <i class="bi bi-check-circle-fill me-1"></i>
+    {{ successMessage() }}
+    <button type="button" class="btn-close py-2" aria-label="Cerrar" (click)="successMessage.set(null)"></button>
+  </div>
+}
+
+@if (errorMessage()) {
+  <div class="alert alert-danger alert-dismissible fade show small py-2 mb-3" role="alert">
+    <i class="bi bi-exclamation-octagon-fill me-1"></i>
+    {{ errorMessage() }}
+    <button type="button" class="btn-close py-2" aria-label="Cerrar" (click)="errorMessage.set(null)"></button>
+  </div>
+}
+
+<!-- Barra de Filtros -->
+<div class="ats-card p-3 mb-4">
+  <div class="row g-2 align-items-center">
+    <div class="col-12 col-md-5">
+      <div class="input-group">
+        <span class="input-group-text bg-white border-end-0 text-muted">
+          <i class="bi bi-search"></i>
+        </span>
+        <input
+          type="text"
+          class="form-control border-start-0 ps-0"
+          placeholder="Buscar por código o nombre..."
+          [ngModel]="searchQuery()"
+          (ngModelChange)="searchQuery.set($event)"
+        />
+      </div>
+    </div>
+    <div class="col-6 col-md-4">
+      <select
+        class="form-select"
+        [ngModel]="selectedTypeFilter()"
+        (ngModelChange)="selectedTypeFilter.set($event)"
+      >
+        <option value="ALL">Todos los tipos</option>
+        <option value="FINISHED">Solo Productos Terminados</option>
+        <option value="SUPPLY">Solo Insumos / Materias Primas</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-3 d-flex align-items-center justify-content-end">
+      <div class="form-check form-switch mb-0">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="activeOnlySwitch"
+          [checked]="showActiveOnly()"
+          (change)="showActiveOnly.set(!showActiveOnly())"
+        />
+        <label class="form-check-label small text-muted" for="activeOnlySwitch">Solo Activos</label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla de Productos -->
+<div class="ats-card p-0 overflow-hidden mb-4">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light text-muted small text-uppercase">
+        <tr>
+          <th class="ps-3 py-3">Código / Nombre</th>
+          <th class="py-3">Tipo</th>
+          <th class="py-3">Unidad / Peso</th>
+          <th class="py-3 text-end">Stock Actual</th>
+          <th class="py-3 text-end">Alerta Mín.</th>
+          <th class="py-3">Precios por Categoría</th>
+          <th class="py-3 text-center">Estado</th>
+          <th class="pe-3 py-3 text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (product of filteredProducts(); track product.prd_uuid) {
+          <tr>
+            <td class="ps-3">
+              <div class="fw-bold text-dark">{{ product.prd_name }}</div>
+              <small class="text-muted">{{ product.prd_code || 'S/C' }}</small>
+            </td>
+            <td>
+              @if (product.prd_type === 'FINISHED') {
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                  Terminado
+                </span>
+              } @else {
+                <span class="badge bg-info-subtle text-info border border-info-subtle">
+                  Insumo
+                </span>
+              }
+            </td>
+            <td>
+              <span class="small text-dark">{{ product.prd_unitlabel || 'Unidad' }}</span>
+              @if (product.prd_weightorvolume) {
+                <span class="text-muted small"> ({{ product.prd_weightorvolume }} kg/lt)</span>
+              }
+            </td>
+            <td class="text-end">
+              <span
+                class="badge fs-6"
+                [class.bg-danger]="(product.prd_currentstock || 0) <= (product.prd_minstockalert || 0)"
+                [class.bg-light]="(product.prd_currentstock || 0) > (product.prd_minstockalert || 0)"
+                [class.text-dark]="(product.prd_currentstock || 0) > (product.prd_minstockalert || 0)"
+                [class.border]="(product.prd_currentstock || 0) > (product.prd_minstockalert || 0)"
+              >
+                {{ product.prd_currentstock }} u.
+              </span>
+            </td>
+            <td class="text-end text-muted small">
+              {{ product.prd_minstockalert || 0 }} u.
+            </td>
+            <td>
+              <div class="d-flex flex-wrap gap-1">
+                @for (price of product.prices || []; track price.prct_uuid) {
+                  <span class="badge bg-light text-secondary border" style="font-size: 0.72rem;">
+                    {{ price.priceTier?.prct_name || 'Lista' }}: <strong>${{ price.prdprc_price }}</strong>
+                  </span>
+                } @empty {
+                  <span class="text-muted small fst-italic">Sin precios asignados</span>
+                }
+              </div>
+            </td>
+            <td class="text-center">
+              @if (product.prd_active !== false) {
+                <span class="badge bg-success-subtle text-success">Activo</span>
+              } @else {
+                <span class="badge bg-secondary-subtle text-secondary">Inactivo</span>
+              }
+            </td>
+            <td class="pe-3 text-end">
+              <div class="btn-group btn-group-sm">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  title="Editar Producto"
+                  (click)="openEditModal(product)"
+                >
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline-danger"
+                  title="Eliminar Producto"
+                  (click)="deleteProduct(product)"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="8" class="text-center py-4 text-muted">
+              @if (isLoading()) {
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                Cargando catálogo de productos...
+              } @else {
+                <i class="bi bi-inbox fs-4 d-block mb-1"></i>
+                No se encontraron productos registrados con los filtros aplicados.
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal de Alta / Edición -->
+@if (isFormOpen()) {
+  <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light">
+          <h5 class="modal-title fw-bold text-dark">
+            <i class="bi" [class.bi-plus-circle]="!isEditing()" [class.bi-pencil-square]="isEditing()"></i>
+            {{ isEditing() ? 'Editar Producto' : 'Nuevo Producto / Insumo' }}
+          </h5>
+          <button type="button" class="btn-close" aria-label="Cerrar" (click)="closeModal()"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <div class="row g-3 mb-3">
+            <!-- Código -->
+            <div class="col-12 col-sm-4">
+              <label for="prodCode" class="form-label small fw-semibold">Código Interno</label>
+              <input
+                type="text"
+                id="prodCode"
+                class="form-control"
+                placeholder="Ej: BOL-3KG"
+                [ngModel]="formCode()"
+                (ngModelChange)="formCode.set($event)"
+              />
+            </div>
+
+            <!-- Nombre -->
+            <div class="col-12 col-sm-8">
+              <label for="prodName" class="form-label small fw-semibold">
+                Nombre del Artículo <span class="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                id="prodName"
+                class="form-control"
+                placeholder="Ej: Bolsa de Hielo Rolito 3 kg"
+                [ngModel]="formName()"
+                (ngModelChange)="formName.set($event)"
+              />
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <!-- Tipo -->
+            <div class="col-12 col-sm-4">
+              <label for="prodType" class="form-label small fw-semibold">Tipo de Producto</label>
+              <select
+                id="prodType"
+                class="form-select"
+                [ngModel]="formType()"
+                (ngModelChange)="formType.set($event)"
+              >
+                <option value="FINISHED">Producto Terminado</option>
+                <option value="SUPPLY">Insumo / Materia Prima</option>
+              </select>
+            </div>
+
+            <!-- Unidad de Medida -->
+            <div class="col-12 col-sm-4">
+              <label for="prodUnit" class="form-label small fw-semibold">Unidad de Medida</label>
+              <input
+                type="text"
+                id="prodUnit"
+                class="form-control"
+                placeholder="Ej: Bolsa, Kg, Pack, Unid"
+                [ngModel]="formUnitLabel()"
+                (ngModelChange)="formUnitLabel.set($event)"
+              />
+            </div>
+
+            <!-- Peso / Volumen -->
+            <div class="col-12 col-sm-4">
+              <label for="prodWeight" class="form-label small fw-semibold">Peso / Capacidad (kg/lt)</label>
+              <input
+                type="number"
+                id="prodWeight"
+                class="form-control"
+                min="0"
+                step="0.1"
+                placeholder="Ej: 3.0"
+                [ngModel]="formWeightOrVolume()"
+                (ngModelChange)="formWeightOrVolume.set($event)"
+              />
+            </div>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <!-- Stock Inicial / Actual -->
+            <div class="col-12 col-sm-4">
+              <label for="prodStock" class="form-label small fw-semibold">Stock Actual</label>
+              <input
+                type="number"
+                id="prodStock"
+                class="form-control"
+                min="0"
+                [ngModel]="formStock()"
+                (ngModelChange)="formStock.set($event)"
+              />
+            </div>
+
+            <!-- Alerta Stock Mínimo -->
+            <div class="col-12 col-sm-4">
+              <label for="prodMinStock" class="form-label small fw-semibold">Alerta Stock Crítico</label>
+              <input
+                type="number"
+                id="prodMinStock"
+                class="form-control"
+                min="0"
+                [ngModel]="formMinStock()"
+                (ngModelChange)="formMinStock.set($event)"
+              />
+            </div>
+
+            <!-- Estado Activo -->
+            <div class="col-12 col-sm-4 d-flex align-items-end pb-2">
+              <div class="form-check form-switch mb-0">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  id="prodActive"
+                  [checked]="formActive()"
+                  (change)="formActive.set(!formActive())"
+                />
+                <label class="form-check-label fw-semibold small" for="prodActive">
+                  Artículo Activo
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Matriz de Precios por Categoría -->
+          <div class="border rounded-3 p-3 bg-light mb-3">
+            <h6 class="fw-bold mb-2 text-dark small text-uppercase">
+              <i class="bi bi-tag-fill me-1 text-primary"></i>Precios de Venta por Categoría
+            </h6>
+            <p class="text-muted small mb-3">
+              Definí el precio unitario para cada lista de precios de la empresa.
+            </p>
+
+            <div class="row g-3">
+              @for (tier of formTierPrices(); track tier.prct_uuid) {
+                <div class="col-12 col-sm-6">
+                  <label class="form-label small fw-semibold text-secondary mb-1">
+                    {{ tier.tierName }}
+                  </label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white">$</span>
+                    <input
+                      type="number"
+                      class="form-control"
+                      min="0"
+                      step="1"
+                      [ngModel]="tier.price"
+                      (ngModelChange)="updateTierPrice(tier.prct_uuid, $event)"
+                    />
+                  </div>
+                </div>
+              } @empty {
+                <div class="col-12 text-center text-muted small py-2">
+                  No hay listas de precios activas registradas para la empresa.
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-outline-secondary" (click)="closeModal()">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary fw-semibold px-4"
+            [disabled]="isSaving() || !formName().trim()"
+            (click)="saveProduct()"
+          >
+            @if (isSaving()) {
+              <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+              Guardando...
+            } @else {
+              <i class="bi bi-check2-circle me-1"></i>
+              {{ isEditing() ? 'Actualizar Producto' : 'Crear Producto' }}
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
