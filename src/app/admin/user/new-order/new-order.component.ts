@@ -189,7 +189,10 @@ export class NewOrderComponent implements OnInit {
       next: (res) => {
         this.isLoading.set(false);
         if (res?.data && Array.isArray(res.data)) {
-          const mappedProducts: PosProduct[] = res.data.map((p) => {
+          const sellableProducts = res.data.filter(
+            (p) => p.prd_type === 'FINISHED' && p.prd_active !== false
+          );
+          const mappedProducts: PosProduct[] = sellableProducts.map((p) => {
             const priceMap: Record<PriceTierCode, number> = { A: 0, B: 0, C: 0 };
             if (p.prices && Array.isArray(p.prices)) {
               for (const pr of p.prices) {
