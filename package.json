@@ -5,6 +5,9 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
+    "build:sw": "node scripts/build-sw.mjs",
+    "build:pwa": "ng build && node scripts/build-sw.mjs",
+    "lint:scaffold": "node scripts/lint-scaffold.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
