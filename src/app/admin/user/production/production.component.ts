@@ -244,7 +244,6 @@ export class ProductionComponent implements OnInit {
       prdord_producedqty: qty,
       prdord_wasteqty: waste,
       prdord_status: 'COMPLETED',
-      prdord_productiondate: new Date().toISOString(),
       prdord_notes: `Lote producido en ${machineName}`
     };
 
