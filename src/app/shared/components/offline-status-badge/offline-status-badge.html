@@ -1,1 +1,43 @@
-<p>offline-status-badge works!</p>
+<div class="offline-badge-container d-inline-flex align-items-center gap-2">
+  <!-- PWA Update Notification Pill -->
+  @if (hasUpdate()) {
+    <button
+      type="button"
+      class="badge bg-primary text-white border-0 py-1 px-2 d-inline-flex align-items-center gap-1 shadow-sm pulse-btn"
+      title="Nueva versión disponible. Click para actualizar"
+      (click)="onApplyUpdate()"
+    >
+      <i class="bi bi-arrow-repeat"></i>
+      <span class="d-none d-sm-inline">Actualizar App</span>
+    </button>
+  }
+
+  <!-- Offline status indicator -->
+  @if (!isOnline()) {
+    <span
+      class="badge bg-warning text-dark py-1 px-2 d-inline-flex align-items-center gap-1 shadow-sm"
+      title="Sin conexión a internet. Los cambios se guardarán localmente."
+    >
+      <i class="bi bi-wifi-off"></i>
+      <span>Sin Conexión</span>
+    </span>
+  }
+
+  <!-- Pending items counter and trigger -->
+  @if (pendingCount() > 0) {
+    <button
+      type="button"
+      class="badge border-0 py-1 px-2 d-inline-flex align-items-center gap-1 shadow-sm cursor-pointer"
+      [ngClass]="isSyncing() ? 'bg-info text-dark' : 'bg-secondary text-white'"
+      [disabled]="isSyncing() || !isOnline()"
+      [title]="isOnline() ? 'Click para sincronizar ahora' : 'Se sincronizará al recuperar señal'"
+      (click)="onSyncNow()"
+    >
+      <i
+        class="bi"
+        [ngClass]="isSyncing() ? 'bi-arrow-repeat spin-icon' : 'bi-cloud-arrow-up-fill'"
+      ></i>
+      <span>{{ pendingCount() }} {{ pendingCount() === 1 ? 'pendiente' : 'pendientes' }}</span>
+    </button>
+  }
+</div>
