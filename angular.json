@@ -23,6 +23,9 @@
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
+            "optimization": {
+              "fonts": false
+            },
             "assets": [
               {
                 "glob": "**/*",
@@ -59,6 +62,9 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "port": 4208
+          },
           "configurations": {
             "production": {
               "buildTarget": "ATSSupply-web-app:build:production"
