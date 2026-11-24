@@ -116,8 +116,11 @@ export class DeliveryComponent implements OnInit {
     this._productService.getProducts(cmp_uuid).subscribe({
       next: (res) => {
         if (res?.data && Array.isArray(res.data)) {
+          const finishedProducts = res.data.filter(
+            (p) => p.prd_type === 'FINISHED' && p.prd_active !== false
+          );
           this.products.set(
-            res.data.map((p) => ({
+            finishedProducts.map((p) => ({
               id: p.prd_uuid,
               name: p.prd_name
             }))
