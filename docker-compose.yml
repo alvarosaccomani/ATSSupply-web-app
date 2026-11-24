@@ -1,0 +1,15 @@
+services:
+  atssupply-web-app:
+    container_name: atssupply-web-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    expose:
+      - "80"
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true
