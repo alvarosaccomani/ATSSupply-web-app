@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -7,6 +7,8 @@ import { ProductService } from '@services/products';
 import { OrderService } from '@services/orders';
 import { CompanyContextService } from '@services/company-context';
 import { AuthService } from '@services/auth';
+import { OfflineSyncService } from '@services/offline-sync';
+import { IndexedDbService } from '@services/indexed-db';
 import { OrderCreateInput, OrderStatus } from '@interfaces/order';
 
 export type PriceTierCode = 'A' | 'B' | 'C';
@@ -44,18 +46,25 @@ export interface CartItem {
   templateUrl: './new-order.component.html',
   styleUrl: './new-order.component.scss'
 })
-export class NewOrderComponent implements OnInit {
+export class NewOrderComponent implements OnInit, OnDestroy {
   private readonly _router = inject(Router);
   private readonly _customerService = inject(CustomerService);
   private readonly _productService = inject(ProductService);
   private readonly _orderService = inject(OrderService);
   private readonly _companyContext = inject(CompanyContextService);
   private readonly _authService = inject(AuthService);
+  private readonly _offlineSync = inject(OfflineSyncService);
+  private readonly _indexedDb = inject(IndexedDbService);
 
   // Estado de carga y feedback
   readonly isLoading = signal<boolean>(false);
   readonly isSubmitting = signal<boolean>(false);
   readonly errorMessage = signal<string | null>(null);
+  readonly successMessage = signal<{ type: 'ONLINE' | 'OFFLINE'; text: string } | null>(null);
+  readonly isSuccessFading = signal<boolean>(false);
+
+  private _successTimer: any = null;
+  private _fadeTimer: any = null;
 
   // Clientes cargados para POS
   readonly customers = signal<PosCustomer[]>([]);
@@ -144,6 +153,42 @@ export class NewOrderComponent implements OnInit {
     this.loadInitialData();
   }
 
+  public ngOnDestroy(): void {
+    this._clearSuccessTimers();
+  }
+
+  private _clearSuccessTimers(): void {
+    if (this._successTimer) {
+      clearTimeout(this._successTimer);
+      this._successTimer = null;
+    }
+    if (this._fadeTimer) {
+      clearTimeout(this._fadeTimer);
+      this._fadeTimer = null;
+    }
+  }
+
+  public dismissSuccessMessage(): void {
+    this._clearSuccessTimers();
+    this.isSuccessFading.set(false);
+    this.successMessage.set(null);
+  }
+
+  private _showSuccessFeedback(type: 'ONLINE' | 'OFFLINE', text: string): void {
+    this._clearSuccessTimers();
+    this.isSuccessFading.set(false);
+    this.successMessage.set({ type, text });
+
+    // Se oculta automáticamente a los 4 segundos con animación de fade-out
+    this._successTimer = setTimeout(() => {
+      this.isSuccessFading.set(true);
+      this._fadeTimer = setTimeout(() => {
+        this.successMessage.set(null);
+        this.isSuccessFading.set(false);
+      }, 400);
+    }, 4000);
+  }
+
   public loadInitialData(): void {
     const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
     if (!cmp_uuid) {
@@ -157,30 +202,16 @@ export class NewOrderComponent implements OnInit {
     this._customerService.getCustomers(cmp_uuid).subscribe({
       next: (res) => {
         if (res?.data && Array.isArray(res.data)) {
-          const mappedCustomers: PosCustomer[] = res.data.map((c) => {
-            const rawTier = (c.priceTier?.prct_code || 'C').toUpperCase();
-            const tierCode: PriceTierCode = ['A', 'B', 'C'].includes(rawTier)
-              ? (rawTier as PriceTierCode)
-              : 'C';
-
-            return {
-              id: c.cus_uuid,
-              name: c.cus_name,
-              tier: tierCode,
-              address: c.cus_address || '',
-              phone: c.cus_phone || '',
-              lat: c.cus_lat !== undefined && c.cus_lat !== null ? Number(c.cus_lat) : null,
-              lng: c.cus_lng !== undefined && c.cus_lng !== null ? Number(c.cus_lng) : null
-            };
-          });
-          this.customers.set(mappedCustomers);
-          if (mappedCustomers.length > 0 && !this.selectedCustomerId()) {
-            this.selectedCustomerId.set(mappedCustomers[0].id);
-          }
+          this._handleCustomersLoaded(cmp_uuid, res.data);
+          this._indexedDb.saveCustomers(cmp_uuid, res.data);
         }
       },
-      error: (err) => {
-        console.warn('Error al cargar clientes para POS:', err);
+      error: async (err) => {
+        console.warn('Network error loading customers, falling back to IndexedDB:', err);
+        const cached = await this._indexedDb.getCustomers(cmp_uuid);
+        if (cached && cached.length > 0) {
+          this._handleCustomersLoaded(cmp_uuid, cached);
+        }
       }
     });
 
@@ -189,46 +220,90 @@ export class NewOrderComponent implements OnInit {
       next: (res) => {
         this.isLoading.set(false);
         if (res?.data && Array.isArray(res.data)) {
-          const sellableProducts = res.data.filter(
-            (p) => p.prd_type === 'FINISHED' && p.prd_active !== false
-          );
-          const mappedProducts: PosProduct[] = sellableProducts.map((p) => {
-            const priceMap: Record<PriceTierCode, number> = { A: 0, B: 0, C: 0 };
-            if (p.prices && Array.isArray(p.prices)) {
-              for (const pr of p.prices) {
-                const code = (pr.priceTier?.prct_code || 'C').toUpperCase() as PriceTierCode;
-                if (code === 'A' || code === 'B' || code === 'C') {
-                  priceMap[code] = Number(pr.prdprc_price) || 0;
-                }
-              }
-            }
-            return {
-              id: p.prd_uuid,
-              name: p.prd_name,
-              stock: Number(p.prd_currentstock) || 0,
-              prices: priceMap
-            };
-          });
-
-          this.products.set(mappedProducts);
-
-          // Inicializar borrador
-          const initialDraft: Record<string, number> = {};
-          for (const prod of mappedProducts) {
-            initialDraft[prod.id] = 0;
-          }
-          this.draftQuantities.set(initialDraft);
+          this._handleProductsLoaded(cmp_uuid, res.data);
+          this._indexedDb.saveProducts(cmp_uuid, res.data);
         }
       },
-      error: (err) => {
+      error: async (err) => {
         this.isLoading.set(false);
-        this.errorMessage.set('No se pudo cargar el catálogo de productos.');
-        console.warn('Error al cargar productos para POS:', err);
+        console.warn('Network error loading products, falling back to IndexedDB:', err);
+        const cached = await this._indexedDb.getProducts(cmp_uuid);
+        if (cached && cached.length > 0) {
+          this._handleProductsLoaded(cmp_uuid, cached);
+        } else {
+          this.errorMessage.set('No se pudo cargar el catálogo de productos ni la caché local.');
+        }
       }
     });
   }
 
+  private _handleCustomersLoaded(cmp_uuid: string, data: any[]): void {
+    const mappedCustomers: PosCustomer[] = data.map((c) => {
+      const rawTier = (c.priceTier?.prct_code || 'C').toUpperCase();
+      const tierCode: PriceTierCode = ['A', 'B', 'C'].includes(rawTier)
+        ? (rawTier as PriceTierCode)
+        : 'C';
+
+      return {
+        id: c.cus_uuid,
+        name: c.cus_name,
+        tier: tierCode,
+        address: c.cus_address || '',
+        phone: c.cus_phone || '',
+        lat: c.cus_lat !== undefined && c.cus_lat !== null ? Number(c.cus_lat) : null,
+        lng: c.cus_lng !== undefined && c.cus_lng !== null ? Number(c.cus_lng) : null
+      };
+    });
+    this.customers.set(mappedCustomers);
+    if (mappedCustomers.length > 0 && !this.selectedCustomerId()) {
+      this.selectedCustomerId.set(mappedCustomers[0].id);
+    }
+  }
+
+  private _handleProductsLoaded(cmp_uuid: string, data: any[]): void {
+    const sellableProducts = data.filter(
+      (p) => p.prd_type === 'FINISHED' && p.prd_active !== false
+    );
+    const mappedProducts: PosProduct[] = sellableProducts.map((p) => {
+      const priceMap: Record<PriceTierCode, number> = { A: 0, B: 0, C: 0 };
+      if (p.prices && Array.isArray(p.prices)) {
+        for (const pr of p.prices) {
+          const code = (pr.priceTier?.prct_code || 'C').toUpperCase() as PriceTierCode;
+          if (code === 'A' || code === 'B' || code === 'C') {
+            priceMap[code] = Number(pr.prdprc_price) || 0;
+          }
+        }
+      }
+      return {
+        id: p.prd_uuid,
+        name: p.prd_name,
+        stock: Number(p.prd_currentstock) || 0,
+        prices: priceMap
+      };
+    });
+
+    this.products.set(mappedProducts);
+
+    // Inicializar borrador
+    const initialDraft: Record<string, number> = {};
+    for (const prod of mappedProducts) {
+      initialDraft[prod.id] = 0;
+    }
+    this.draftQuantities.set(initialDraft);
+  }
+
+  public resetOrderForm(): void {
+    const initialDraft: Record<string, number> = {};
+    for (const prod of this.products()) {
+      initialDraft[prod.id] = 0;
+    }
+    this.draftQuantities.set(initialDraft);
+    this.orderNotes.set('');
+    this.orderStatus.set('PENDIENTE DE ENTREGA');
+  }
+
   public updateQuantity(productId: string, delta: number): void {
+    if (this.successMessage()) this.successMessage.set(null);
     this.draftQuantities.update((curr) => {
       const currentVal = curr[productId] || 0;
       const nextVal = Math.max(0, currentVal + delta);
@@ -237,6 +312,7 @@ export class NewOrderComponent implements OnInit {
   }
 
   public setQuantity(productId: string, val: number | string): void {
+    if (this.successMessage()) this.successMessage.set(null);
     const parsed = typeof val === 'number' ? val : parseInt(val, 10);
     const safeVal = isNaN(parsed) ? 0 : Math.max(0, parsed);
     this.draftQuantities.update((curr) => ({
@@ -364,7 +440,7 @@ export class NewOrderComponent implements OnInit {
     );
   }
 
-  public submitOrder(): void {
+  public async submitOrder(): Promise<void> {
     if (!this.canSubmit()) {
       return;
     }
@@ -402,13 +478,50 @@ export class NewOrderComponent implements OnInit {
       }))
     };
 
+    // Si estamos sin conexión, encolar directamente en IndexedDB
+    if (!this._offlineSync.isOnline()) {
+      try {
+        await this._offlineSync.enqueueOrderCreation(cmp_uuid, orderPayload);
+        this.isSubmitting.set(false);
+        this.resetOrderForm();
+        this._showSuccessFeedback(
+          'OFFLINE',
+          'Pedido guardado localmente (Modo Offline). Se subirá al servidor automáticamente al recuperar la señal.'
+        );
+      } catch (e: any) {
+        this.isSubmitting.set(false);
+        this.errorMessage.set('No se pudo guardar el pedido offline en el dispositivo.');
+      }
+      return;
+    }
+
+    // Si estamos con conexión, enviar al backend con fallback a cola local ante fallo de red
     this._orderService.saveOrder(orderPayload).subscribe({
       next: () => {
         this.isSubmitting.set(false);
-        this._router.navigate(['/admin/user/dashboard']);
+        this.resetOrderForm();
+        this._showSuccessFeedback(
+          'ONLINE',
+          '¡Pedido registrado y confirmado en el servidor con éxito!'
+        );
       },
-      error: (err) => {
+      error: async (err) => {
+        if (!navigator.onLine || err.status === 0) {
+          try {
+            await this._offlineSync.enqueueOrderCreation(cmp_uuid, orderPayload);
+            this.isSubmitting.set(false);
+            this.resetOrderForm();
+            this._showSuccessFeedback(
+              'OFFLINE',
+              'Se perdió la señal: el pedido fue guardado localmente (Modo Offline) y se subirá automáticamente.'
+            );
+            return;
+          } catch {
+            // Continúa a mostrar el error estándar
+          }
+        }
         this.isSubmitting.set(false);
+        this.dismissSuccessMessage();
         const msg =
           err.error?.error || err.error?.message || 'Error al persistir el pedido en el servidor.';
         this.errorMessage.set(msg);
