@@ -181,6 +181,7 @@
         </div>
       </div>
       <div class="d-flex align-items-center gap-2">
+        <app-offline-status-badge></app-offline-status-badge>
         <span class="badge bg-light text-dark fw-semibold" style="font-size: 0.7rem;">
           {{ roleLabel() }}
         </span>
@@ -206,6 +207,7 @@
       </div>
 
       <div class="d-flex align-items-center gap-3">
+        <app-offline-status-badge></app-offline-status-badge>
         <!-- Selector rápido de empresa en desktop si tiene varias -->
         @if (companies().length > 1) {
           <div class="d-flex align-items-center gap-2">

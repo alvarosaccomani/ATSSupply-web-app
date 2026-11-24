@@ -4,12 +4,20 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { CompanyContextService, UserRole } from '@services/company-context';
 import { AuthService } from '@services/auth';
+import { OfflineStatusBadgeComponent } from '@components/offline-status-badge/offline-status-badge';
 import { CompanyInterface } from '@interfaces/company';
 
 @Component({
   selector: 'app-user-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, FormsModule],
+  imports: [
+    CommonModule,
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    FormsModule,
+    OfflineStatusBadgeComponent
+  ],
   templateUrl: './user-layout.component.html',
   styleUrl: './user-layout.component.scss'
 })
