@@ -116,7 +116,7 @@ export class DashboardComponent implements OnInit {
       next: (res) => {
         if (res?.data && Array.isArray(res.data)) {
           const finishedProducts = res.data
-            .filter((p) => p.prd_type === 'FINISHED')
+            .filter((p) => p.prd_type === 'FINISHED' && p.prd_active !== false)
             .map((p) => ({
               id: p.prd_uuid,
               name: p.prd_name,
