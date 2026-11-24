@@ -1,12 +1,15 @@
 import { TestBed } from '@angular/core/testing';
-import { OfflineSync } from './offline-sync';
+import { provideHttpClient } from '@angular/common/http';
+import { OfflineSyncService } from './offline-sync';
 
-describe('OfflineSync', () => {
-  let service: OfflineSync;
+describe('OfflineSyncService', () => {
+  let service: OfflineSyncService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
-    service = TestBed.inject(OfflineSync);
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient()]
+    });
+    service = TestBed.inject(OfflineSyncService);
   });
 
   it('should be created', () => {
