@@ -11,60 +11,16 @@
       </div>
     </div>
 
-    <!-- Navegación Principal -->
+    <!-- Navegación Principal Dinámica -->
     <nav class="sidebar-nav">
-      <a class="sidebar-btn" routerLink="dashboard" routerLinkActive="active">
-        <i class="bi bi-grid-1x2-fill"></i> Tablero y Depósito
-      </a>
-      @if (showProduction()) {
-        <a class="sidebar-btn" routerLink="production" routerLinkActive="active">
-          <i class="bi bi-gear-fill"></i> Producción e Insumos
+      @for (item of dynamicNavItems(); track item.key) {
+        <a class="sidebar-btn" [routerLink]="item.route" routerLinkActive="active">
+          <i class="bi {{ item.icon }}"></i> {{ item.title }}
         </a>
       }
-      @if (showOrders()) {
-        <a class="sidebar-btn" routerLink="new-order" routerLinkActive="active">
-          <i class="bi bi-plus-circle-fill"></i> Nuevo Pedido (POS)
-        </a>
-      }
-      @if (showDelivery()) {
-        <a class="sidebar-btn" routerLink="delivery" routerLinkActive="active">
-          <i class="bi bi-truck"></i> Carga y Reparto
-        </a>
-      }
-      @if (showOrdersHistory()) {
-        <a class="sidebar-btn" routerLink="orders" routerLinkActive="active">
-          <i class="bi bi-receipt"></i> Historial de Pedidos
-        </a>
-      }
-      @if (showCustomers()) {
-        <a class="sidebar-btn" routerLink="customers" routerLinkActive="active">
-          <i class="bi bi-people-fill"></i> Agenda de Clientes
-        </a>
-      }
-      @if (showProducts()) {
-        <a class="sidebar-btn" routerLink="products" routerLinkActive="active">
-          <i class="bi bi-box-seam-fill"></i> Catálogo de Productos
-        </a>
-      }
-      @if (showPriceTiers()) {
-        <a class="sidebar-btn" routerLink="price-tiers" routerLinkActive="active">
-          <i class="bi bi-tag-fill"></i> Listas de Precios
-        </a>
-      }
-      @if (showMachines()) {
-        <a class="sidebar-btn" routerLink="machines" routerLinkActive="active">
-          <i class="bi bi-cpu-fill"></i> Máquinas y Líneas
-        </a>
-      }
-      @if (showStockMovements()) {
-        <a class="sidebar-btn" routerLink="stock-movements" routerLinkActive="active">
-          <i class="bi bi-journal-text"></i> Kardex de Stock
-        </a>
-      }
+
       @if (showTeam()) {
-        <a class="sidebar-btn" routerLink="team" routerLinkActive="active">
-          <i class="bi bi-person-badge-fill"></i> Equipo de Trabajo
-        </a>
+        <hr class="border-white border-opacity-10 my-2" />
         <a class="sidebar-btn" routerLink="/admin/application/companies" title="Panel de Administración Madre">
           <i class="bi bi-shield-lock-fill text-warning"></i> Configuración Madre
         </a>
@@ -113,50 +69,30 @@
           </select>
         </div>
       }
-
-      <!-- Selector de Empresa si pertenece a más de una -->
-      @if (companies().length > 1) {
-        <div class="mt-2">
-          <label class="text-white-50 mb-1" style="font-size: 0.68rem;">Empresa Activa:</label>
-          <select
-            class="form-select form-select-sm bg-dark text-white border-secondary py-1"
-            style="font-size: 0.75rem;"
-            [value]="activeCompany()?.cmp_uuid"
-            (change)="onCompanyChange($any($event.target).value)"
-          >
-            @for (cmp of companies(); track cmp.cmp_uuid) {
-              <option [value]="cmp.cmp_uuid">{{ cmp.cmp_name }}</option>
-            }
-          </select>
-        </div>
-      } @else {
-        <div class="text-white-50 mt-1 d-flex align-items-center gap-1" style="font-size: 0.72rem;">
-          <i class="bi bi-building"></i>
-          <span class="text-white">{{ activeCompany()?.cmp_name || 'Alvi Hielo' }}</span>
-        </div>
-      }
     </div>
   </aside>
 
-  <!-- ÁREA PRINCIPAL -->
+  <!-- CONTENIDO PRINCIPAL -->
   <div class="app-main">
     <!-- Header Móvil (< 768px) -->
     <header class="mobile-topbar d-flex d-md-none py-2 px-3 align-items-center justify-content-between">
       <div class="d-flex align-items-center gap-2">
-        <i class="bi bi-box-seam-fill fs-5 text-info"></i>
+        <a routerLink="profile" class="d-flex align-items-center gap-2 text-decoration-none">
+          <div class="user-avatar-circle small-avatar">
+            {{ userInitials() }}
+          </div>
+        </a>
         <div>
-          <div class="fw-bold lh-1">ATSSupply</div>
-          <small class="text-white-50" style="font-size: 0.7rem;">
-            {{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }}
-          </small>
+          <div class="fw-bold lh-1 text-white">{{ activeCompany()?.cmp_name ?? 'Alvi Hielo' }}</div>
+          <small class="text-white-50" style="font-size: 0.72rem;">{{ userName() }}</small>
         </div>
       </div>
       <div class="d-flex align-items-center gap-2">
         <app-offline-status-badge></app-offline-status-badge>
         @if (activeCompanyRoles().length > 1) {
           <select
-            class="form-select form-select-sm bg-light text-dark fw-semibold py-0"
-            style="font-size: 0.7rem; width: auto;"
+            class="form-select form-select-sm bg-dark text-white border-secondary py-0 px-1"
+            style="font-size: 0.7rem; height: 26px; width: auto;"
             [value]="activeRoleUuid()"
             (change)="onRoleUuidChange($any($event.target).value)"
           >
@@ -254,43 +190,10 @@
 <!-- BOTTOM NAV (SOLO CELULAR < 768px) -->
 <nav class="bottom-nav d-md-none">
   <div class="row g-0 text-center">
-    <div class="col">
-      <a class="nav-btn" routerLink="dashboard" routerLinkActive="active">
-        <i class="bi bi-grid-1x2-fill"></i><span>Depósito</span>
-      </a>
-    </div>
-    @if (showProduction()) {
+    @for (item of bottomNavItems(); track item.key) {
       <div class="col">
-        <a class="nav-btn" routerLink="production" routerLinkActive="active">
-          <i class="bi bi-gear-fill"></i><span>Producción</span>
-        </a>
-      </div>
-    }
-    @if (showOrders()) {
-      <div class="col">
-        <a class="nav-btn" routerLink="new-order" routerLinkActive="active">
-          <i class="bi bi-plus-circle-fill text-primary"></i><span>Pedido</span>
-        </a>
-      </div>
-    }
-    @if (showDelivery()) {
-      <div class="col">
-        <a class="nav-btn" routerLink="delivery" routerLinkActive="active">
-          <i class="bi bi-truck"></i><span>Reparto</span>
-        </a>
-      </div>
-    }
-    @if (showCustomers()) {
-      <div class="col">
-        <a class="nav-btn" routerLink="customers" routerLinkActive="active">
-          <i class="bi bi-people-fill"></i><span>Clientes</span>
-        </a>
-      </div>
-    }
-    @if (showProducts()) {
-      <div class="col">
-        <a class="nav-btn" routerLink="products" routerLinkActive="active">
-          <i class="bi bi-box-seam-fill"></i><span>Productos</span>
+        <a class="nav-btn" [routerLink]="item.route" routerLinkActive="active">
+          <i class="bi {{ item.icon }}"></i><span>{{ item.title }}</span>
         </a>
       </div>
     }
