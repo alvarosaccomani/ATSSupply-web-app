@@ -1,1 +1,466 @@
-<p>orders works!</p>
+<div class="orders-container">
+  <!-- ENCABEZADO PRINCIPAL -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+      <h3 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+        <i class="bi bi-receipt text-primary"></i>
+        Gestión e Histórico de Pedidos
+      </h3>
+      <p class="text-muted small mb-0">
+        Monitoreo comercial, cobranzas, despachos y auditoría de ventas para
+        <strong class="text-dark">{{ activeCompany()?.cmp_name || 'Alvi Hielo' }}</strong>.
+      </p>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+        (click)="loadData()"
+        [disabled]="isLoading()"
+      >
+        <i class="bi bi-arrow-clockwise" [class.spin]="isLoading()"></i>
+        <span>Actualizar</span>
+      </button>
+      <a
+        routerLink="/admin/user/new-order"
+        class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm px-3"
+      >
+        <i class="bi bi-plus-circle"></i>
+        <span>Nuevo Pedido (POS)</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ALERTAS DE ESTADO -->
+  @if (successMessage()) {
+    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-3 py-2" role="alert">
+      <i class="bi bi-check-circle-fill fs-5"></i>
+      <div>{{ successMessage() }}</div>
+    </div>
+  }
+
+  @if (errorMessage()) {
+    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-3 py-2" role="alert">
+      <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+      <div>{{ errorMessage() }}</div>
+    </div>
+  }
+
+  <!-- KPIS COMERCIALES -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="kpi-card card border-0 shadow-sm p-3">
+        <div class="d-flex align-items-center gap-2 text-primary mb-1">
+          <i class="bi bi-currency-dollar fs-5"></i>
+          <span class="small fw-semibold text-uppercase tracking-wider">Facturación</span>
+        </div>
+        <div class="fs-4 fw-bold text-dark">${{ kpiTotalAmount() | number }}</div>
+        <small class="text-muted" style="font-size: 0.72rem;">Ventas netas activas</small>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="kpi-card card border-0 shadow-sm p-3">
+        <div class="d-flex align-items-center gap-2 text-success mb-1">
+          <i class="bi bi-check2-circle fs-5"></i>
+          <span class="small fw-semibold text-uppercase tracking-wider">Cobrado</span>
+        </div>
+        <div class="fs-4 fw-bold text-success">${{ kpiTotalPaid() | number }}</div>
+        <small class="text-muted" style="font-size: 0.72rem;">Efectivo recaudado</small>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="kpi-card card border-0 shadow-sm p-3">
+        <div class="d-flex align-items-center gap-2 text-warning mb-1">
+          <i class="bi bi-clock-history fs-5"></i>
+          <span class="small fw-semibold text-uppercase tracking-wider">Por Cobrar</span>
+        </div>
+        <div class="fs-4 fw-bold text-warning-emphasis">${{ kpiTotalPending() | number }}</div>
+        <small class="text-muted" style="font-size: 0.72rem;">Pendientes y cta. cte.</small>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="kpi-card card border-0 shadow-sm p-3">
+        <div class="d-flex align-items-center gap-2 text-info mb-1">
+          <i class="bi bi-box-seam fs-5"></i>
+          <span class="small fw-semibold text-uppercase tracking-wider">Bultos / Unidades</span>
+        </div>
+        <div class="fs-4 fw-bold text-dark">{{ kpiTotalUnits() | number }} <small class="fs-6 fw-normal text-muted">u.</small></div>
+        <small class="text-muted" style="font-size: 0.72rem;">{{ filteredOrders().length }} pedidos listados</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- BARRA DE FILTROS -->
+  <div class="card border-0 shadow-sm p-3 mb-4">
+    <div class="row g-2 align-items-center">
+      <!-- Búsqueda Libre -->
+      <div class="col-12 col-md-3">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+          <input
+            type="text"
+            class="form-control border-start-0"
+            placeholder="Buscar por cliente, ID o notas..."
+            [ngModel]="searchQuery()"
+            (ngModelChange)="searchQuery.set($event)"
+          />
+        </div>
+      </div>
+
+      <!-- Filtro por Estado -->
+      <div class="col-6 col-md-3">
+        <select
+          class="form-select form-select-sm"
+          [ngModel]="selectedStatus()"
+          (ngModelChange)="selectedStatus.set($event); onFilterChange()"
+        >
+          <option value="">Todos los estados</option>
+          <option value="PENDIENTE_DE_ENTREGA">Pendiente de Entrega</option>
+          <option value="ENTREGADO_DEBE">Entregado (Debe)</option>
+          <option value="PAGADO">Pagado</option>
+          <option value="CUENTA_CORRIENTE">Cuenta Corriente</option>
+          <option value="CANCELADO">Cancelado</option>
+        </select>
+      </div>
+
+      <!-- Filtro por Cliente -->
+      <div class="col-6 col-md-2">
+        <select
+          class="form-select form-select-sm"
+          [ngModel]="selectedCustomerUuid()"
+          (ngModelChange)="selectedCustomerUuid.set($event); onFilterChange()"
+        >
+          <option value="">Todos los clientes</option>
+          @for (c of customers(); track c.cus_uuid) {
+            <option [value]="c.cus_uuid">{{ c.cus_name }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Filtro Fecha Desde -->
+      <div class="col-6 col-md-2">
+        <input
+          type="date"
+          class="form-control form-control-sm"
+          title="Fecha desde"
+          [ngModel]="startDate()"
+          (ngModelChange)="startDate.set($event); onFilterChange()"
+        />
+      </div>
+
+      <!-- Filtro Fecha Hasta y Reset -->
+      <div class="col-6 col-md-2 d-flex gap-1">
+        <input
+          type="date"
+          class="form-control form-control-sm"
+          title="Fecha hasta"
+          [ngModel]="endDate()"
+          (ngModelChange)="endDate.set($event); onFilterChange()"
+        />
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          title="Limpiar Filtros"
+          (click)="resetFilters()"
+        >
+          <i class="bi bi-x-circle"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLA DE PEDIDOS -->
+  <div class="card border-0 shadow-sm overflow-hidden">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light text-uppercase text-secondary" style="font-size: 0.72rem; letter-spacing: 0.05em;">
+          <tr>
+            <th class="ps-3 py-3">N° Pedido</th>
+            <th>Fecha y Hora</th>
+            <th>Cliente y Destino</th>
+            <th class="text-center">Bultos</th>
+            <th class="text-end">Total</th>
+            <th class="text-center">Estado</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="border-top-0">
+          @if (isLoading()) {
+            <tr>
+              <td colspan="7" class="text-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                <span>Cargando pedidos de la empresa...</span>
+              </td>
+            </tr>
+          } @else if (filteredOrders().length === 0) {
+            <tr>
+              <td colspan="7" class="text-center py-5 text-muted">
+                <i class="bi bi-inbox fs-2 d-block mb-2 text-secondary opacity-50"></i>
+                <div class="fw-semibold">No se encontraron pedidos con los filtros aplicados</div>
+                <small>Probá limpiando los filtros o registrá un nuevo pedido en el POS.</small>
+              </td>
+            </tr>
+          } @else {
+            @for (ord of filteredOrders(); track ord.ord_uuid) {
+              <tr>
+                <!-- ID de Pedido -->
+                <td class="ps-3">
+                  <span class="font-monospace fw-bold text-dark small">
+                    #{{ ord.ord_uuid.substring(0, 8).toUpperCase() }}
+                  </span>
+                </td>
+
+                <!-- Fecha y Hora -->
+                <td>
+                  <div class="small fw-semibold text-dark">{{ formatOrderDate(ord.ord_orderdate || ord.ord_createdat) }}</div>
+                </td>
+
+                <!-- Cliente y Dirección -->
+                <td>
+                  <div class="fw-semibold text-dark small">{{ getCustomerName(ord) }}</div>
+                  <small class="text-muted d-block text-truncate" style="max-width: 220px;" [title]="getCustomerAddress(ord)">
+                    <i class="bi bi-geo-alt me-1"></i>{{ getCustomerAddress(ord) }}
+                  </small>
+                </td>
+
+                <!-- Bultos -->
+                <td class="text-center font-monospace small">
+                  {{ getOrderTotalUnits(ord) }} u.
+                </td>
+
+                <!-- Monto Total -->
+                <td class="text-end fw-bold text-dark">
+                  ${{ ord.ord_totalamount | number }}
+                </td>
+
+                <!-- Estado del Pedido -->
+                <td class="text-center">
+                  <span [class]="getStatusBadgeClass(ord.ord_status)" style="font-size: 0.72rem;">
+                    {{ getStatusLabel(ord.ord_status) }}
+                  </span>
+                </td>
+
+                <!-- Acciones -->
+                <td class="text-end pe-3">
+                  <div class="btn-group btn-group-sm">
+                    <button
+                      type="button"
+                      class="btn btn-outline-primary py-0 px-2"
+                      title="Ver Detalle Completo"
+                      (click)="openDetailModal(ord)"
+                    >
+                      <i class="bi bi-eye"></i>
+                    </button>
+                    @if (ord.ord_status !== 'PAGADO' && ord.ord_status !== 'CANCELADO') {
+                      <button
+                        type="button"
+                        class="btn btn-outline-success py-0 px-2"
+                        title="Marcar como Pagado"
+                        (click)="markAsPaid(ord)"
+                      >
+                        <i class="bi bi-check-lg"></i>
+                      </button>
+                    }
+                    @if (ord.ord_status !== 'CANCELADO') {
+                      <button
+                        type="button"
+                        class="btn btn-outline-danger py-0 px-2"
+                        title="Cancelar Pedido (Reintegrar Stock)"
+                        (click)="openCancelConfirmation(ord)"
+                      >
+                        <i class="bi bi-x-lg"></i>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE COMPLETO DEL PEDIDO -->
+@if (isDetailModalOpen() && selectedOrder(); as order) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light">
+          <div>
+            <h5 class="modal-title fw-bold text-dark fs-6 d-flex align-items-center gap-2 mb-0">
+              <i class="bi bi-receipt text-primary"></i>
+              Pedido #{{ order.ord_uuid.substring(0, 8).toUpperCase() }}
+            </h5>
+            <small class="text-muted">Registrado el {{ formatOrderDate(order.ord_orderdate || order.ord_createdat) }}</small>
+          </div>
+          <button
+            type="button"
+            class="btn-close"
+            (click)="closeDetailModal()"
+          ></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <!-- DATOS DEL CLIENTE Y ESTADO -->
+          <div class="row g-3 mb-4 p-3 bg-light rounded-3">
+            <div class="col-md-6">
+              <label class="text-muted small text-uppercase fw-semibold" style="font-size: 0.68rem;">Cliente</label>
+              <div class="fw-bold text-dark">{{ getCustomerName(order) }}</div>
+              <div class="text-muted small"><i class="bi bi-geo-alt me-1"></i>{{ getCustomerAddress(order) }}</div>
+            </div>
+            <div class="col-md-3">
+              <label class="text-muted small text-uppercase fw-semibold" style="font-size: 0.68rem;">Estado Actual</label>
+              <div>
+                <span [class]="getStatusBadgeClass(order.ord_status)">
+                  {{ getStatusLabel(order.ord_status) }}
+                </span>
+              </div>
+            </div>
+            <div class="col-md-3 text-md-end">
+              <label class="text-muted small text-uppercase fw-semibold" style="font-size: 0.68rem;">Total del Pedido</label>
+              <div class="fs-4 fw-bold text-primary">${{ order.ord_totalamount | number }}</div>
+            </div>
+          </div>
+
+          <!-- DESGLOSE DE PRODUCTOS -->
+          <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-1">
+            <i class="bi bi-boxes"></i> Ítems del Pedido
+          </h6>
+          <div class="table-responsive border rounded-3 mb-3">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light text-secondary" style="font-size: 0.72rem;">
+                <tr>
+                  <th class="ps-3 py-2">Producto</th>
+                  <th class="text-center">Cantidad</th>
+                  <th class="text-end">Precio Unit.</th>
+                  <th class="text-end pe-3">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                @if (isFetchingDetail()) {
+                  <tr>
+                    <td colspan="4" class="text-center py-3 text-muted">
+                      <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+                      <span>Cargando ítems...</span>
+                    </td>
+                  </tr>
+                } @else if (!order.details || order.details.length === 0) {
+                  <tr>
+                    <td colspan="4" class="text-center py-3 text-muted">
+                      Sin desglose de ítems registrado.
+                    </td>
+                  </tr>
+                } @else {
+                  @for (d of order.details; track d.ordd_uuid || d.prd_uuid) {
+                    <tr>
+                      <td class="ps-3 fw-semibold text-dark small">
+                        {{ getProductName(d.prd_uuid) }}
+                      </td>
+                      <td class="text-center font-monospace small">
+                        {{ d.ordd_quantity }} u.
+                      </td>
+                      <td class="text-end font-monospace small">
+                        ${{ d.ordd_unitprice | number }}
+                      </td>
+                      <td class="text-end pe-3 font-monospace fw-bold text-dark small">
+                        ${{ (d.ordd_subtotal || (d.ordd_quantity * d.ordd_unitprice)) | number }}
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <!-- OBSERVACIONES -->
+          @if (order.ord_notes) {
+            <div class="alert alert-secondary py-2 small mb-0">
+              <strong class="d-block text-dark">Notas / Instrucciones de Entrega:</strong>
+              {{ order.ord_notes }}
+            </div>
+          }
+        </div>
+
+        <div class="modal-footer bg-light p-2 d-flex justify-content-between">
+          <div>
+            @if (order.ord_status !== 'CANCELADO') {
+              <button
+                type="button"
+                class="btn btn-outline-danger btn-sm"
+                (click)="openCancelConfirmation(order)"
+                [disabled]="isActionLoading()"
+              >
+                <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
+              </button>
+            }
+          </div>
+
+          <div class="d-flex align-items-center gap-2">
+            @if (order.ord_status !== 'PAGADO' && order.ord_status !== 'CANCELADO') {
+              <button
+                type="button"
+                class="btn btn-success btn-sm px-3"
+                (click)="markAsPaid(order)"
+                [disabled]="isActionLoading()"
+              >
+                <i class="bi bi-check2 me-1"></i>Marcar como Pagado
+              </button>
+            }
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm px-3"
+              (click)="closeDetailModal()"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- MODAL: CONFIRMACIÓN DE CANCELACIÓN -->
+@if (isCancelModalOpen() && orderToCancel(); as ord) {
+  <div class="modal-backdrop fade show" style="z-index: 1060;"></div>
+  <div class="modal fade show d-block" style="z-index: 1065;" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-danger text-white py-2">
+          <h6 class="modal-title fw-bold fs-6 mb-0 d-flex align-items-center gap-2">
+            <i class="bi bi-exclamation-triangle"></i> Cancelar Pedido
+          </h6>
+          <button type="button" class="btn-close btn-close-white" (click)="closeCancelModal()"></button>
+        </div>
+
+        <div class="modal-body p-3 text-center">
+          <p class="mb-2">¿Estás seguro de cancelar el pedido <strong>#{{ ord.ord_uuid.substring(0, 8).toUpperCase() }}</strong>?</p>
+          <small class="text-muted d-block">
+            Esta acción revertirá automáticamente los bultos al stock disponible y registrará el movimiento en el Kardex.
+          </small>
+        </div>
+
+        <div class="modal-footer bg-light p-2 justify-content-center">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeCancelModal()" [disabled]="isActionLoading()">
+            No, volver
+          </button>
+          <button type="button" class="btn btn-danger btn-sm px-3" (click)="confirmCancelOrder()" [disabled]="isActionLoading()">
+            @if (isActionLoading()) {
+              <span class="spinner-border spinner-border-sm me-1"></span>
+              <span>Cancelando...</span>
+            } @else {
+              <span>Sí, cancelar</span>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
