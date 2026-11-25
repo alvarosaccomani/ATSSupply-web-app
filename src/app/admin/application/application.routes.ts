@@ -15,6 +15,10 @@ export const APPLICATION_ROUTES: Routes = [
         loadComponent: () => import('./company-items/company-items').then((m) => m.CompanyItems)
       },
       {
+        path: 'roles-permissions',
+        loadComponent: () => import('./roles-permissions/roles-permissions').then((m) => m.RolesPermissions)
+      },
+      {
         path: '',
         redirectTo: 'companies',
         pathMatch: 'full'
