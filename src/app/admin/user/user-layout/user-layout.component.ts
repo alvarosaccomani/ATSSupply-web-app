@@ -1,11 +1,11 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-import { CompanyContextService, UserRole } from '@services/company-context';
+import { CompanyContextService } from '@services/company-context';
 import { AuthService } from '@services/auth';
 import { OfflineStatusBadgeComponent } from '@components/offline-status-badge/offline-status-badge';
-import { CompanyInterface } from '@interfaces/company';
+import { UserRolCompanyInterface } from '@interfaces/user-rol-company';
 
 @Component({
   selector: 'app-user-layout',
@@ -32,18 +32,18 @@ export class UserLayoutComponent {
   readonly companies = this.companyContext.companies;
   readonly activeCompany = this.companyContext.activeCompany;
 
-  // Roles y Módulos
-  readonly hasProduction = this.companyContext.hasProduction;
-  readonly hasSales = this.companyContext.hasSales;
-  readonly role = this.companyContext.activeRole;
+  // Roles reales en la compañía activa desde user-roles-company
+  readonly activeCompanyRoles = this.companyContext.activeCompanyRoles;
+  readonly activeRoleUuid = this.companyContext.activeRoleUuid;
   readonly roleLabel = this.companyContext.roleLabel;
+  readonly role = this.companyContext.activeRole;
 
-  // Permisos según rol
+  // Permisos según rol real y módulos operativos
   readonly showProduction = this.companyContext.canProduce;
   readonly showOrders = this.companyContext.canTakeOrders;
   readonly showDelivery = this.companyContext.canDeliver;
   readonly showCustomers = computed<boolean>(
-    () => this.hasSales() && (this.role() === 'OWNER' || this.role() === 'SELLER')
+    () => this.companyContext.hasSales() && (this.role() === 'OWNER' || this.role() === 'SELLER')
   );
   readonly showProducts = computed<boolean>(
     () => this.role() === 'OWNER' || this.role() === 'SELLER'
@@ -52,11 +52,8 @@ export class UserLayoutComponent {
     () => this.role() === 'OWNER'
   );
   readonly showMachines = computed<boolean>(
-    () => this.hasProduction() && this.role() === 'OWNER'
+    () => this.companyContext.hasProduction() && this.role() === 'OWNER'
   );
-
-  // Estado del toolbar de simulación/desarrollo
-  readonly isDevToolbarOpen = signal<boolean>(false);
 
   // Nombre formateado e iniciales
   readonly userName = computed<string>(() => {
@@ -77,8 +74,8 @@ export class UserLayoutComponent {
     return initials || (user.usr_nick ? user.usr_nick.charAt(0).toUpperCase() : 'U');
   });
 
-  public onRoleChange(newRole: string): void {
-    this.companyContext.setActiveRole(newRole as UserRole);
+  public onRoleUuidChange(newRolUuid: string): void {
+    this.companyContext.setActiveRoleUuid(newRolUuid);
   }
 
   public onCompanyChange(cmpUuid: string): void {
@@ -88,19 +85,12 @@ export class UserLayoutComponent {
     }
   }
 
-  public toggleProduction(): void {
-    this.companyContext.toggleProduction();
-  }
-
-  public toggleSales(): void {
-    this.companyContext.toggleSales();
-  }
-
-  public toggleDevToolbar(): void {
-    this.isDevToolbarOpen.update((v) => !v);
+  public getRoleName(item: UserRolCompanyInterface): string {
+    return this.companyContext.getRoleItemName(item);
   }
 
   public onLogout(): void {
     this.authService.logout();
   }
 }
+
