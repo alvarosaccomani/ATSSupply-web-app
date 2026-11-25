@@ -85,6 +85,21 @@ export class AuthService {
     this._router.navigate(['/auth/login']);
   }
 
+  /**
+   * Actualiza los datos del usuario en la sesión local.
+   */
+  public updateStoredUser(updatedUser: Partial<AuthUser>): void {
+    const current = this.currentUser();
+    if (!current) return;
+    const merged = { ...current, ...updatedUser };
+    this.currentUser.set(merged);
+    try {
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(merged));
+    } catch (e) {
+      console.warn('No se pudo actualizar usuario en LocalStorage:', e);
+    }
+  }
+
   private _getStoredToken(): string | null {
     try {
       return localStorage.getItem(STORAGE_KEYS.TOKEN);
