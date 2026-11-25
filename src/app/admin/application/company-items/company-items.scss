@@ -1,0 +1,53 @@
+.company-items-container {
+  padding-bottom: 3rem;
+
+  .assigned-rubro-card {
+    background-color: #ffffff;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.06);
+    }
+
+    .rubro-title {
+      font-size: 0.95rem;
+    }
+
+    .rubro-desc {
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+  }
+
+  .available-rubro-item {
+    background-color: #ffffff;
+    transition: all 0.15s ease-in-out;
+
+    &:hover {
+      background-color: #f0f7ff;
+      border-color: #93c5fd !important;
+    }
+  }
+
+  .rubro-icon-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+}

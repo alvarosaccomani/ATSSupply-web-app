@@ -1,1 +1,423 @@
-<p>company-items works!</p>
+<div class="company-items-container">
+  <!-- ENCABEZADO -->
+  <header class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h3 fw-bold mb-0 text-dark">Rubros y Especialidades</h1>
+        <span class="badge bg-warning-subtle text-dark border border-warning-subtle px-2 py-1">
+          Configuración Madre
+        </span>
+      </div>
+      <p class="text-muted small mb-0 mt-1">
+        Parametriza las especialidades operativas de cada empresa y gestiona el catálogo maestro.
+      </p>
+    </div>
+
+    <!-- Navegación por Pestañas -->
+    <div class="btn-group shadow-sm" role="group">
+      <button
+        type="button"
+        class="btn btn-sm"
+        [class.btn-primary]="activeTab() === 'assignment'"
+        [class.btn-outline-primary]="activeTab() !== 'assignment'"
+        (click)="activeTab.set('assignment')"
+      >
+        <i class="bi bi-building-check me-1"></i>Asignación por Empresa
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm"
+        [class.btn-primary]="activeTab() === 'catalog'"
+        [class.btn-outline-primary]="activeTab() !== 'catalog'"
+        (click)="activeTab.set('catalog')"
+      >
+        <i class="bi bi-tags-fill me-1"></i>Catálogo Maestro
+      </button>
+    </div>
+  </header>
+
+  <!-- MENSAJES DE ESTADO -->
+  @if (errorMessage()) {
+    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm py-2 mb-3" role="alert">
+      <i class="bi bi-exclamation-triangle-fill fs-5 text-danger"></i>
+      <div class="flex-grow-1 small">{{ errorMessage() }}</div>
+      <button type="button" class="btn-close p-2" aria-label="Close" (click)="errorMessage.set(null)"></button>
+    </div>
+  }
+
+  @if (successMessage()) {
+    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm py-2 mb-3" role="alert">
+      <i class="bi bi-check-circle-fill fs-5 text-success"></i>
+      <div class="flex-grow-1 small">{{ successMessage() }}</div>
+      <button type="button" class="btn-close p-2" aria-label="Close" (click)="successMessage.set(null)"></button>
+    </div>
+  }
+
+  <!-- PESTAÑA 1: ASIGNACIÓN POR EMPRESA -->
+  @if (activeTab() === 'assignment') {
+    <!-- SELECTOR DE EMPRESA TENANT -->
+    <section class="card border-0 shadow-sm rounded-3 p-3 mb-4">
+      <div class="row g-3 align-items-center">
+        <div class="col-12 col-md-6 col-lg-5">
+          <label class="form-label small fw-semibold text-muted mb-1">
+            <i class="bi bi-building me-1"></i>Seleccionar Empresa Tenant:
+          </label>
+          <select
+            class="form-select form-select-sm fw-semibold"
+            [value]="selectedCompanyUuid()"
+            (change)="onCompanyChange($any($event.target).value)"
+            [disabled]="isLoading() || isSaving()"
+          >
+            @for (cmp of companies(); track cmp.cmp_uuid) {
+              <option [value]="cmp.cmp_uuid">
+                {{ cmp.cmp_name }} {{ cmp.cmp_status === 'INACTIVE' ? '(Inactiva)' : '' }}
+              </option>
+            }
+          </select>
+        </div>
+
+        @if (selectedCompany(); as sc) {
+          <div class="col-12 col-md-6 col-lg-7 d-flex align-items-center justify-content-md-end gap-3">
+            <div class="text-md-end">
+              <div class="small fw-semibold text-dark">{{ sc.cmp_name }}</div>
+              <small class="text-muted d-block text-truncate" style="max-width: 320px;">
+                {{ sc.cmp_address || 'Sin dirección' }} • ID: {{ sc.cmp_uuid }}
+              </small>
+            </div>
+            <span class="badge bg-primary px-3 py-2">
+              {{ assignedCompanyItems().length }} {{ assignedCompanyItems().length === 1 ? 'rubro activo' : 'rubros activos' }}
+            </span>
+          </div>
+        }
+      </div>
+    </section>
+
+    <div class="row g-4">
+      <!-- COLUMNA IZQUIERDA: RUBROS ASIGNADOS A LA EMPRESA -->
+      <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm rounded-3 p-4 h-100">
+          <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-check-circle-fill text-success fs-5"></i>
+              <h2 class="h5 fw-bold mb-0 text-dark">Rubros Habilitados</h2>
+            </div>
+            <span class="badge bg-success-subtle text-success border border-success-subtle">
+              Operativos
+            </span>
+          </div>
+
+          @if (isLoading()) {
+            <div class="text-center py-5 text-muted">
+              <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+              <span>Cargando rubros de la empresa...</span>
+            </div>
+          } @else if (assignedCompanyItems().length === 0) {
+            <div class="text-center py-5 text-muted">
+              <i class="bi bi-tag fs-1 d-block mb-2 text-secondary opacity-50"></i>
+              <div class="fw-semibold">Esta empresa no tiene rubros asignados</div>
+              <small class="text-muted">Selecciona rubros del panel lateral derecho para habilitarlos.</small>
+            </div>
+          } @else {
+            <div class="row g-3">
+              @for (ci of assignedCompanyItems(); track ci.cmpitm_uuid) {
+                <div class="col-12 col-sm-6">
+                  <div class="assigned-rubro-card p-3 rounded-3 border d-flex flex-column justify-content-between h-100">
+                    <div>
+                      <div class="d-flex align-items-start justify-content-between gap-2 mb-1">
+                        <div class="fw-bold text-dark rubro-title">
+                          <i class="bi bi-tag-fill text-primary me-1"></i>
+                          {{ ci.itm?.itm_name || 'Rubro' }}
+                        </div>
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-outline-danger p-0 px-2 rounded-pill"
+                          title="Desvincular rubro"
+                          [disabled]="isSaving()"
+                          (click)="confirmUnlinkItem(ci)"
+                        >
+                          <i class="bi bi-x"></i>
+                        </button>
+                      </div>
+                      <p class="text-muted small mb-0 rubro-desc">
+                        {{ ci.itm?.itm_description || 'Sin descripción' }}
+                      </p>
+                    </div>
+                    <small class="text-muted mt-2 d-block border-top pt-1" style="font-size: 0.7rem;">
+                      Alta: {{ ci.cmpitm_createdat ? (ci.cmpitm_createdat | date:'dd/MM/yyyy') : '-' }}
+                    </small>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- COLUMNA DERECHA: RUBROS DISPONIBLES PARA ASIGNAR -->
+      <div class="col-12 col-lg-5">
+        <div class="card border-0 shadow-sm rounded-3 p-4 h-100">
+          <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-plus-circle-fill text-primary fs-5"></i>
+              <h2 class="h5 fw-bold mb-0 text-dark">Catálogo Disponible</h2>
+            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-link p-0 text-decoration-none"
+              (click)="activeTab.set('catalog')"
+            >
+              Gestionar catálogo →
+            </button>
+          </div>
+
+          <p class="text-muted small mb-3">
+            Haz clic en <strong>+ Asignar</strong> para activar la especialidad en <strong>{{ selectedCompany()?.cmp_name }}</strong>:
+          </p>
+
+          @if (unassignedMasterItems().length === 0) {
+            <div class="text-center py-4 text-muted bg-light rounded-3">
+              <i class="bi bi-check2-all fs-2 text-success d-block mb-1"></i>
+              <div class="fw-semibold small">Todos los rubros del catálogo ya están asignados a esta empresa</div>
+            </div>
+          } @else {
+            <div class="d-flex flex-column gap-2">
+              @for (item of unassignedMasterItems(); track item.itm_uuid) {
+                <div class="available-rubro-item p-2 px-3 rounded-3 border d-flex align-items-center justify-content-between gap-2">
+                  <div class="text-truncate">
+                    <div class="fw-semibold text-dark small">{{ item.itm_name }}</div>
+                    <small class="text-muted text-truncate d-block" style="max-width: 250px;">
+                      {{ item.itm_description || 'Sin descripción' }}
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-primary flex-shrink-0 d-flex align-items-center gap-1"
+                    [disabled]="isSaving()"
+                    (click)="assignItemToCompany(item.itm_uuid)"
+                  >
+                    <i class="bi bi-plus"></i>
+                    <span>Asignar</span>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- PESTAÑA 2: CATÁLOGO MAESTRO DE RUBROS -->
+  @if (activeTab() === 'catalog') {
+    <section class="card border-0 shadow-sm rounded-3 overflow-hidden">
+      <!-- Toolbar del Catálogo -->
+      <div class="p-3 border-bottom d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3">
+        <div class="input-group input-group-sm" style="max-width: 380px;">
+          <span class="input-group-text bg-white border-end-0 text-muted">
+            <i class="bi bi-search"></i>
+          </span>
+          <input
+            type="text"
+            class="form-control border-start-0"
+            placeholder="Buscar en el catálogo maestro..."
+            [ngModel]="searchCatalogQuery()"
+            (ngModelChange)="searchCatalogQuery.set($event)"
+          />
+          @if (searchCatalogQuery()) {
+            <button class="btn btn-outline-secondary border-start-0" type="button" (click)="searchCatalogQuery.set('')">
+              <i class="bi bi-x"></i>
+            </button>
+          }
+        </div>
+
+        <button
+          type="button"
+          class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm"
+          [disabled]="isSaving()"
+          (click)="openCreateItemModal()"
+        >
+          <i class="bi bi-plus-lg"></i>
+          <span>Nuevo Rubro Maestro</span>
+        </button>
+      </div>
+
+      <!-- Tabla del Catálogo Maestro -->
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light text-muted small text-uppercase">
+            <tr>
+              <th class="ps-4" style="min-width: 220px;">Nombre del Rubro</th>
+              <th style="min-width: 320px;">Descripción</th>
+              <th style="min-width: 150px;">Identificador</th>
+              <th class="text-end pe-4" style="min-width: 120px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (filteredMasterItems().length === 0) {
+              <tr>
+                <td colspan="4" class="text-center py-5 text-muted">
+                  <i class="bi bi-tags fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                  <div class="fw-semibold">No se encontraron rubros en el catálogo</div>
+                  <small class="text-muted">Crea el primer rubro maestro usando el botón superior.</small>
+                </td>
+              </tr>
+            } @else {
+              @for (item of filteredMasterItems(); track item.itm_uuid) {
+                <tr>
+                  <td class="ps-4 py-3">
+                    <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                      <span class="rubro-icon-circle bg-primary-subtle text-primary">
+                        <i class="bi bi-tag-fill"></i>
+                      </span>
+                      <span>{{ item.itm_name }}</span>
+                    </div>
+                  </td>
+                  <td class="small text-muted">
+                    {{ item.itm_description || 'Sin descripción' }}
+                  </td>
+                  <td class="small text-muted font-monospace" style="font-size: 0.75rem;">
+                    {{ item.itm_uuid }}
+                  </td>
+                  <td class="text-end pe-4">
+                    <div class="btn-group btn-group-sm">
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary"
+                        title="Editar rubro"
+                        (click)="openEditItemModal(item)"
+                        [disabled]="isSaving()"
+                      >
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-danger"
+                        title="Eliminar rubro"
+                        (click)="deleteMasterItem(item)"
+                        [disabled]="isSaving()"
+                      >
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>
+
+<!-- MODAL: CREAR / EDITAR RUBRO MAESTRO -->
+@if (isItemModalOpen()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content shadow border-0 rounded-3">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-tag-fill text-primary me-2"></i>
+            {{ isEditingItem() ? 'Editar Rubro Maestro' : 'Nuevo Rubro Maestro' }}
+          </h5>
+          <button type="button" class="btn-close" (click)="closeItemModal()" [disabled]="isSaving()"></button>
+        </div>
+
+        <form (ngSubmit)="submitMasterItem()">
+          <div class="modal-body p-4">
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Nombre del Rubro <span class="text-danger">*</span></label>
+              <input
+                type="text"
+                class="form-control"
+                placeholder="Ej. Fábrica de Hielo, Panadería, Distribuidora..."
+                [ngModel]="formItemName()"
+                (ngModelChange)="formItemName.set($event)"
+                name="formItemName"
+                required
+              />
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Descripción</label>
+              <textarea
+                class="form-control"
+                rows="3"
+                placeholder="Descripción del rubro o especialidad..."
+                [ngModel]="formItemDescription()"
+                (ngModelChange)="formItemDescription.set($event)"
+                name="formItemDescription"
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="modal-footer border-top">
+            <button
+              type="button"
+              class="btn btn-outline-secondary"
+              (click)="closeItemModal()"
+              [disabled]="isSaving()"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="btn btn-primary d-flex align-items-center gap-2"
+              [disabled]="isSaving()"
+            >
+              @if (isSaving()) {
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <span>Guardando...</span>
+              } @else {
+                <i class="bi bi-check2"></i>
+                <span>{{ isEditingItem() ? 'Actualizar' : 'Crear Rubro' }}</span>
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- MODAL: CONFIRMAR DESVINCULACIÓN DE RUBRO -->
+@if (itemToUnlink()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content shadow border-0 rounded-3">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold text-danger">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>Desvincular Rubro
+          </h5>
+          <button type="button" class="btn-close" (click)="cancelUnlinkItem()" [disabled]="isSaving()"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="mb-2">
+            ¿Estás seguro de que deseas desvincular el rubro
+            <strong>{{ itemToUnlink()?.itm?.itm_name }}</strong>
+            de la empresa <strong>{{ selectedCompany()?.cmp_name }}</strong>?
+          </p>
+          <small class="text-muted d-block">
+            El rubro permanecerá en el catálogo maestro pero ya no estará habilitado para este tenant.
+          </small>
+        </div>
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-outline-secondary" (click)="cancelUnlinkItem()" [disabled]="isSaving()">
+            Cancelar
+          </button>
+          <button type="button" class="btn btn-danger d-flex align-items-center gap-2" (click)="executeUnlinkItem()" [disabled]="isSaving()">
+            @if (isSaving()) {
+              <div class="spinner-border spinner-border-sm" role="status"></div>
+              <span>Desvinculando...</span>
+            } @else {
+              <i class="bi bi-trash-fill"></i>
+              <span>Confirmar Desvinculación</span>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
