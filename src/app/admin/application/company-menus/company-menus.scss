@@ -1,0 +1,26 @@
+.company-menus-container {
+  min-height: calc(100vh - 120px);
+}
+
+.root-row {
+  background-color: #f8fafc;
+  font-size: 0.95rem;
+}
+
+.child-row {
+  background-color: #ffffff;
+  transition: background-color 0.15s ease-in-out;
+
+  &:hover {
+    background-color: #f1f5f9;
+  }
+}
+
+.restore-icon-circle {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
