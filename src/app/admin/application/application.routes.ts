@@ -31,6 +31,10 @@ export const APPLICATION_ROUTES: Routes = [
         loadComponent: () => import('./menus/menus').then((m) => m.Menus)
       },
       {
+        path: 'resource-modules',
+        loadComponent: () => import('./resource-modules/resource-modules').then((m) => m.ResourceModules)
+      },
+      {
         path: '',
         redirectTo: 'companies',
         pathMatch: 'full'
