@@ -51,6 +51,11 @@
           <i class="bi bi-cpu-fill"></i> Máquinas y Líneas
         </a>
       }
+      @if (showStockMovements()) {
+        <a class="sidebar-btn" routerLink="stock-movements" routerLinkActive="active">
+          <i class="bi bi-journal-text"></i> Kardex de Stock
+        </a>
+      }
     </nav>
 
     <!-- Sección de Usuario y Empresa (Base del Sidebar) -->

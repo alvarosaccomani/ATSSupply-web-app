@@ -54,6 +54,9 @@ export class UserLayoutComponent {
   readonly showMachines = computed<boolean>(
     () => this.companyContext.hasProduction() && this.role() === 'OWNER'
   );
+  readonly showStockMovements = computed<boolean>(
+    () => this.role() === 'OWNER'
+  );
 
   // Nombre formateado e iniciales
   readonly userName = computed<string>(() => {
