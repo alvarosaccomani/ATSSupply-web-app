@@ -19,6 +19,10 @@ export const USER_ROUTES: Routes = [
         loadComponent: () => import('./delivery/delivery.component').then((m) => m.DeliveryComponent)
       },
       {
+        path: 'orders',
+        loadComponent: () => import('./orders/orders').then((m) => m.Orders)
+      },
+      {
         path: 'production',
         loadComponent: () => import('./production/production.component').then((m) => m.ProductionComponent)
       },
