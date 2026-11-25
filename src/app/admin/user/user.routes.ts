@@ -51,6 +51,10 @@ export const USER_ROUTES: Routes = [
         loadComponent: () => import('./team/team').then((m) => m.Team)
       },
       {
+        path: 'profile',
+        loadComponent: () => import('./profile/profile').then((m) => m.Profile)
+      },
+      {
         path: '',
         redirectTo: 'dashboard',
         pathMatch: 'full'
