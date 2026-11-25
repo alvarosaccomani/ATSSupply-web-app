@@ -19,6 +19,10 @@ export const APPLICATION_ROUTES: Routes = [
         loadComponent: () => import('./roles-permissions/roles-permissions').then((m) => m.RolesPermissions)
       },
       {
+        path: 'company-settings',
+        loadComponent: () => import('./company-settings/company-settings').then((m) => m.CompanySettings)
+      },
+      {
         path: '',
         redirectTo: 'companies',
         pathMatch: 'full'
