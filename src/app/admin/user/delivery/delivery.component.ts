@@ -1,8 +1,9 @@
-import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { OrderService } from '@services/orders';
 import { ProductService } from '@services/products';
 import { CompanyContextService } from '@services/company-context';
+import { OfflineSyncService } from '@services/offline-sync';
 import { OrderInterface, OrderStatus } from '@interfaces/order';
 
 export type DeliveryStatus = 'PENDIENTE DE ENTREGA' | 'PAGADO' | 'ENTREGADO DEBE' | 'CUENTA CORRIENTE';
@@ -34,14 +35,20 @@ export interface TruckLoadItem {
   templateUrl: './delivery.component.html',
   styleUrl: './delivery.component.scss'
 })
-export class DeliveryComponent implements OnInit {
+export class DeliveryComponent implements OnInit, OnDestroy {
   private readonly _orderService = inject(OrderService);
   private readonly _productService = inject(ProductService);
   private readonly _companyContext = inject(CompanyContextService);
+  private readonly _offlineSync = inject(OfflineSyncService);
 
   // Estados de carga y feedback
   readonly isLoading = signal<boolean>(false);
   readonly errorMessage = signal<string | null>(null);
+  readonly successMessage = signal<{ type: 'ONLINE' | 'OFFLINE'; text: string } | null>(null);
+  readonly isSuccessFading = signal<boolean>(false);
+
+  private _successTimer: any = null;
+  private _fadeTimer: any = null;
 
   // Catálogo de productos para consolidar la estiba
   readonly products = signal<{ id: string; name: string }[]>([]);
@@ -101,6 +108,42 @@ export class DeliveryComponent implements OnInit {
 
   public ngOnInit(): void {
     this.loadDeliveryData();
+  }
+
+  public ngOnDestroy(): void {
+    this._clearSuccessTimers();
+  }
+
+  private _clearSuccessTimers(): void {
+    if (this._successTimer) {
+      clearTimeout(this._successTimer);
+      this._successTimer = null;
+    }
+    if (this._fadeTimer) {
+      clearTimeout(this._fadeTimer);
+      this._fadeTimer = null;
+    }
+  }
+
+  public dismissSuccessMessage(): void {
+    this._clearSuccessTimers();
+    this.isSuccessFading.set(false);
+    this.successMessage.set(null);
+  }
+
+  private _showSuccessFeedback(type: 'ONLINE' | 'OFFLINE', text: string): void {
+    this._clearSuccessTimers();
+    this.isSuccessFading.set(false);
+    this.successMessage.set({ type, text });
+
+    // Auto-ocultado suave a los 4 segundos con animación de fade-out
+    this._successTimer = setTimeout(() => {
+      this.isSuccessFading.set(true);
+      this._fadeTimer = setTimeout(() => {
+        this.successMessage.set(null);
+        this.isSuccessFading.set(false);
+      }, 400);
+    }, 4000);
   }
 
   public loadDeliveryData(): void {
@@ -186,15 +229,38 @@ export class DeliveryComponent implements OnInit {
     // Mapeo a convención del backend
     const backendStatus: OrderStatus = this._mapToBackendStatus(status);
 
+    // Si estamos sin conexión, encolar en IndexedDB directamente sin revertir
+    if (!this._offlineSync.isOnline()) {
+      this._offlineSync.enqueueOrderStatusUpdate(cmp_uuid, orderId, backendStatus);
+      this._showSuccessFeedback(
+        'OFFLINE',
+        `Entrega marcada como "${status}" (Modo Offline). Se subirá al servidor al recuperar la señal.`
+      );
+      return;
+    }
+
     this._orderService
       .updateOrder(cmp_uuid, orderId, { ord_status: backendStatus })
       .subscribe({
         next: () => {
-          // Confirmado por backend
+          this._showSuccessFeedback(
+            'ONLINE',
+            `Entrega confirmada como "${status}" en el servidor con éxito.`
+          );
         },
         error: (err) => {
+          // Si el fallo fue por corte repentino de red, encolar offline
+          if (!navigator.onLine || err.status === 0) {
+            this._offlineSync.enqueueOrderStatusUpdate(cmp_uuid, orderId, backendStatus);
+            this._showSuccessFeedback(
+              'OFFLINE',
+              `Se perdió la señal: entrega marcada localmente como "${status}". Se subirá automáticamente.`
+            );
+            return;
+          }
+
           console.error('Error al persistir estado de entrega:', err);
-          // Reversión optimista ante falla de red
+          // Reversión optimista ante error real de validación en el servidor
           if (previousStatus) {
             this.orders.update((list) =>
               list.map((order) =>
@@ -202,6 +268,7 @@ export class DeliveryComponent implements OnInit {
               )
             );
           }
+          this.dismissSuccessMessage();
           const msg =
             err.error?.error ||
             err.error?.message ||

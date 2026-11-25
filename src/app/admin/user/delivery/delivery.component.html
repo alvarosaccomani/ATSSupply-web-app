@@ -59,6 +59,32 @@
       <span class="badge bg-light text-secondary border">Jornada Activa</span>
     </div>
 
+    @if (successMessage(); as success) {
+      <div
+        class="alert py-2 small mb-3 d-flex align-items-center justify-content-between gap-2 shadow-sm alert-feedback"
+        [ngClass]="success.type === 'OFFLINE' ? 'alert-warning' : 'alert-success'"
+        [class.alert-fade-out]="isSuccessFading()"
+      >
+        <div class="d-flex align-items-center gap-2">
+          <i
+            class="bi fs-5"
+            [ngClass]="success.type === 'OFFLINE' ? 'bi-cloud-slash-fill text-warning' : 'bi-check-circle-fill text-success'"
+          ></i>
+          <div>
+            <div class="fw-bold">{{ success.type === 'OFFLINE' ? 'Entrega Registrada Offline' : 'Entrega Confirmada' }}</div>
+            <div>{{ success.text }}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn-close btn-close-sm p-1"
+          aria-label="Cerrar"
+          title="Cerrar mensaje"
+          (click)="dismissSuccessMessage()"
+        ></button>
+      </div>
+    }
+
     @if (errorMessage()) {
       <div class="alert alert-warning py-2 small mb-3">
         <i class="bi bi-exclamation-triangle-fill me-1"></i>
