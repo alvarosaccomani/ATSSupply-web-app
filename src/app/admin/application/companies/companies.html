@@ -1,1 +1,471 @@
-<p>companies works!</p>
+<div class="companies-container">
+  <!-- ENCABEZADO -->
+  <header class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h3 fw-bold mb-0 text-dark">Empresas y Tenants</h1>
+        <span class="badge bg-warning-subtle text-dark border border-warning-subtle px-2 py-1">
+          Ecosistema Multitenant
+        </span>
+      </div>
+      <p class="text-muted small mb-0 mt-1">
+        Administración centralizada de organizaciones, aislamiento de datos y configuración madre.
+      </p>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1 shadow-sm"
+        [disabled]="isLoading() || isSaving()"
+        (click)="loadCompanies()"
+        title="Recargar empresas"
+      >
+        <i class="bi bi-arrow-clockwise" [class.spin]="isLoading()"></i>
+        <span>Actualizar</span>
+      </button>
+
+      <button
+        type="button"
+        class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm"
+        [disabled]="isSaving()"
+        (click)="openCreateModal()"
+      >
+        <i class="bi bi-plus-lg"></i>
+        <span>Nueva Empresa</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MENSAJES DE ESTADO -->
+  @if (errorMessage()) {
+    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm py-2 mb-3" role="alert">
+      <i class="bi bi-exclamation-triangle-fill fs-5 text-danger"></i>
+      <div class="flex-grow-1 small">{{ errorMessage() }}</div>
+      <button type="button" class="btn-close p-2" aria-label="Close" (click)="errorMessage.set(null)"></button>
+    </div>
+  }
+
+  @if (successMessage()) {
+    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm py-2 mb-3" role="alert">
+      <i class="bi bi-check-circle-fill fs-5 text-success"></i>
+      <div class="flex-grow-1 small">{{ successMessage() }}</div>
+      <button type="button" class="btn-close p-2" aria-label="Close" (click)="successMessage.set(null)"></button>
+    </div>
+  }
+
+  <!-- KPIS / RESUMEN -->
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-sm-4">
+      <div class="card kpi-card border-0 shadow-sm rounded-3 p-3">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Total Tenants</span>
+            <div class="h3 fw-bold mb-0 text-dark">{{ totalCompanies() }}</div>
+          </div>
+          <div class="kpi-icon-circle bg-primary-subtle text-primary">
+            <i class="bi bi-building fs-4"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-sm-4">
+      <div class="card kpi-card border-0 shadow-sm rounded-3 p-3">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Empresas Activas</span>
+            <div class="h3 fw-bold mb-0 text-success">{{ activeCompaniesCount() }}</div>
+          </div>
+          <div class="kpi-icon-circle bg-success-subtle text-success">
+            <i class="bi bi-check-circle-fill fs-4"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-sm-4">
+      <div class="card kpi-card border-0 shadow-sm rounded-3 p-3">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Inactivas / Pausadas</span>
+            <div class="h3 fw-bold mb-0 text-secondary">{{ inactiveCompaniesCount() }}</div>
+          </div>
+          <div class="kpi-icon-circle bg-secondary-subtle text-secondary">
+            <i class="bi bi-pause-circle-fill fs-4"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BARRA DE FILTROS Y BÚSQUEDA -->
+  <section class="card border-0 shadow-sm rounded-3 p-3 mb-4">
+    <div class="row g-2 align-items-center">
+      <div class="col-12 col-md-7 col-lg-8">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white border-end-0 text-muted">
+            <i class="bi bi-search"></i>
+          </span>
+          <input
+            type="text"
+            class="form-control border-start-0"
+            placeholder="Buscar por nombre, email, teléfono o UUID..."
+            [ngModel]="searchQuery()"
+            (ngModelChange)="searchQuery.set($event)"
+          />
+          @if (searchQuery()) {
+            <button class="btn btn-outline-secondary border-start-0" type="button" (click)="searchQuery.set('')">
+              <i class="bi bi-x"></i>
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="col-12 col-md-3 col-lg-2">
+        <select
+          class="form-select form-select-sm"
+          [ngModel]="filterStatus()"
+          (ngModelChange)="filterStatus.set($event)"
+        >
+          <option value="all">Todos los estados</option>
+          <option value="ACTIVE">Solo Activas</option>
+          <option value="INACTIVE">Solo Inactivas</option>
+        </select>
+      </div>
+
+      <div class="col-12 col-md-2 col-lg-2 text-md-end">
+        <span class="badge bg-light text-dark border py-2 px-3 w-100 w-md-auto">
+          {{ filteredCompanies().length }} {{ filteredCompanies().length === 1 ? 'empresa' : 'empresas' }}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- TABLA DE EMPRESAS -->
+  <section class="card border-0 shadow-sm rounded-3 overflow-hidden">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light text-muted small text-uppercase">
+          <tr>
+            <th class="ps-4" style="min-width: 260px;">Empresa / Razón Social</th>
+            <th style="min-width: 220px;">Contacto</th>
+            <th style="min-width: 200px;">Ubicación</th>
+            <th style="min-width: 130px;">Estado</th>
+            <th class="text-end pe-4" style="min-width: 140px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (isLoading()) {
+            <tr>
+              <td colspan="5" class="text-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                <span>Cargando organizaciones del ecosistema...</span>
+              </td>
+            </tr>
+          } @else if (filteredCompanies().length === 0) {
+            <tr>
+              <td colspan="5" class="text-center py-5 text-muted">
+                <i class="bi bi-building-slash fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                <div class="fw-semibold">No se encontraron empresas</div>
+                <small class="text-muted">Ajusta los filtros o registra una nueva empresa.</small>
+              </td>
+            </tr>
+          } @else {
+            @for (company of filteredCompanies(); track company.cmp_uuid) {
+              <tr>
+                <!-- Empresa -->
+                <td class="ps-4 py-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div
+                      class="company-avatar"
+                      [style.background-color]="company.cmp_primarycolor || '#0f4c81'"
+                    >
+                      {{ getCompanyInitials(company.cmp_name) }}
+                    </div>
+                    <div>
+                      <div class="fw-bold text-dark">{{ company.cmp_name }}</div>
+                      @if (company.cmp_description) {
+                        <small class="text-muted d-block text-truncate" style="max-width: 280px;">
+                          {{ company.cmp_description }}
+                        </small>
+                      }
+                      <small class="text-muted text-monospace" style="font-size: 0.7rem;">
+                        ID: {{ company.cmp_uuid }}
+                      </small>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Contacto -->
+                <td>
+                  <div class="small text-dark">{{ company.cmp_email || '-' }}</div>
+                  <div class="small text-muted d-flex align-items-center gap-2 mt-1">
+                    @if (company.cmp_phone) {
+                      <span><i class="bi bi-telephone me-1"></i>{{ company.cmp_phone }}</span>
+                    }
+                    @if (company.cmp_whatsapp) {
+                      <span class="text-success"><i class="bi bi-whatsapp me-1"></i>{{ company.cmp_whatsapp }}</span>
+                    }
+                  </div>
+                </td>
+
+                <!-- Ubicación -->
+                <td class="small text-muted">
+                  {{ company.cmp_address || 'Sin dirección registrada' }}
+                </td>
+
+                <!-- Estado -->
+                <td>
+                  @if ((company.cmp_status || 'ACTIVE').toUpperCase() !== 'INACTIVE') {
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                      <i class="bi bi-check-circle me-1"></i>Activa
+                    </span>
+                  } @else {
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">
+                      <i class="bi bi-pause-circle me-1"></i>Inactiva
+                    </span>
+                  }
+                </td>
+
+                <!-- Acciones -->
+                <td class="text-end pe-4">
+                  <div class="btn-group btn-group-sm">
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary"
+                      title="Editar empresa"
+                      (click)="openEditModal(company)"
+                      [disabled]="isSaving()"
+                    >
+                      <i class="bi bi-pencil"></i>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn btn-outline-warning"
+                      [title]="(company.cmp_status || 'ACTIVE').toUpperCase() === 'INACTIVE' ? 'Activar empresa' : 'Pausar empresa'"
+                      (click)="toggleCompanyStatus(company)"
+                      [disabled]="isSaving()"
+                    >
+                      <i class="bi" [class.bi-play-fill]="(company.cmp_status || 'ACTIVE').toUpperCase() === 'INACTIVE'" [class.bi-pause-fill]="(company.cmp_status || 'ACTIVE').toUpperCase() !== 'INACTIVE'"></i>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn btn-outline-danger"
+                      title="Eliminar empresa"
+                      (click)="confirmDelete(company)"
+                      [disabled]="isSaving()"
+                    >
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<!-- MODAL: REGISTRAR / EDITAR EMPRESA -->
+@if (isModalOpen()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content shadow border-0 rounded-3">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-building text-primary me-2"></i>
+            {{ isEditing() ? 'Editar Empresa Tenant' : 'Registrar Nueva Empresa Tenant' }}
+          </h5>
+          <button type="button" class="btn-close" (click)="closeModal()" [disabled]="isSaving()"></button>
+        </div>
+
+        <form (ngSubmit)="submitCompany()">
+          <div class="modal-body p-4">
+            <div class="row g-3">
+              <div class="col-12 col-md-8">
+                <label class="form-label small fw-semibold">Razón Social / Nombre Comercial <span class="text-danger">*</span></label>
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="Ej. Alvi Hielo S.A."
+                  [ngModel]="formName()"
+                  (ngModelChange)="formName.set($event)"
+                  name="formName"
+                  required
+                />
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label class="form-label small fw-semibold">Estado Operativo</label>
+                <select
+                  class="form-select"
+                  [ngModel]="formStatus()"
+                  (ngModelChange)="formStatus.set($event)"
+                  name="formStatus"
+                >
+                  <option value="ACTIVE">Activa</option>
+                  <option value="INACTIVE">Inactiva / Pausada</option>
+                </select>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold">Correo Electrónico de Contacto</label>
+                <input
+                  type="email"
+                  class="form-control"
+                  placeholder="contacto@empresa.com"
+                  [ngModel]="formEmail()"
+                  (ngModelChange)="formEmail.set($event)"
+                  name="formEmail"
+                />
+              </div>
+
+              <div class="col-12 col-md-3">
+                <label class="form-label small fw-semibold">Teléfono</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="011-4567-8901"
+                  [ngModel]="formPhone()"
+                  (ngModelChange)="formPhone.set($event)"
+                  name="formPhone"
+                />
+              </div>
+
+              <div class="col-12 col-md-3">
+                <label class="form-label small fw-semibold">WhatsApp</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="+54911..."
+                  [ngModel]="formWhatsapp()"
+                  (ngModelChange)="formWhatsapp.set($event)"
+                  name="formWhatsapp"
+                />
+              </div>
+
+              <div class="col-12 col-md-8">
+                <label class="form-label small fw-semibold">Dirección Comercial / Planta</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="Av. Libertador 1234, CABA"
+                  [ngModel]="formAddress()"
+                  (ngModelChange)="formAddress.set($event)"
+                  name="formAddress"
+                />
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label class="form-label small fw-semibold">Color Temático de Marca</label>
+                <div class="input-group">
+                  <input
+                    type="color"
+                    class="form-control form-control-color"
+                    [ngModel]="formPrimaryColor()"
+                    (ngModelChange)="formPrimaryColor.set($event)"
+                    name="formColorPicker"
+                    title="Selecciona el color primario"
+                  />
+                  <input
+                    type="text"
+                    class="form-control text-uppercase"
+                    placeholder="#0F4C81"
+                    [ngModel]="formPrimaryColor()"
+                    (ngModelChange)="formPrimaryColor.set($event)"
+                    name="formPrimaryColor"
+                  />
+                </div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label small fw-semibold">Descripción / Rubro Comercial</label>
+                <textarea
+                  class="form-control"
+                  rows="2"
+                  placeholder="Descripción de la empresa o rubro principal..."
+                  [ngModel]="formDescription()"
+                  (ngModelChange)="formDescription.set($event)"
+                  name="formDescription"
+                ></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer border-top">
+            <button
+              type="button"
+              class="btn btn-outline-secondary"
+              (click)="closeModal()"
+              [disabled]="isSaving()"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="btn btn-primary d-flex align-items-center gap-2"
+              [disabled]="isSaving()"
+            >
+              @if (isSaving()) {
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <span>Guardando...</span>
+              } @else {
+                <i class="bi bi-check2"></i>
+                <span>{{ isEditing() ? 'Actualizar Empresa' : 'Registrar Empresa' }}</span>
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- MODAL: CONFIRMAR ELIMINACIÓN -->
+@if (companyToDelete()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content shadow border-0 rounded-3">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold text-danger">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>Eliminar Empresa Tenant
+          </h5>
+          <button type="button" class="btn-close" (click)="cancelDelete()" [disabled]="isSaving()"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="mb-2">
+            ¿Estás seguro de que deseas eliminar la empresa
+            <strong>{{ companyToDelete()?.cmp_name }}</strong>?
+          </p>
+          <div class="alert alert-warning py-2 mb-2 small">
+            ID: {{ companyToDelete()?.cmp_uuid }}
+          </div>
+          <small class="text-muted d-block">
+            Esta acción dará de baja la empresa en la suite. Los datos vinculados quedarán restringidos.
+          </small>
+        </div>
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-outline-secondary" (click)="cancelDelete()" [disabled]="isSaving()">
+            Cancelar
+          </button>
+          <button type="button" class="btn btn-danger d-flex align-items-center gap-2" (click)="executeDelete()" [disabled]="isSaving()">
+            @if (isSaving()) {
+              <div class="spinner-border spinner-border-sm" role="status"></div>
+              <span>Eliminando...</span>
+            } @else {
+              <i class="bi bi-trash-fill"></i>
+              <span>Confirmar Eliminación</span>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
