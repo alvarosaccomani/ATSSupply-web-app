@@ -1,1 +1,257 @@
-<p>roles-permissions works!</p>
+<div class="roles-permissions-container">
+  <!-- ENCABEZADO -->
+  <header class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h3 fw-bold mb-0 text-dark">Matriz de Roles y Permisos (RBAC)</h1>
+        <span class="badge bg-warning-subtle text-dark border border-warning-subtle px-2 py-1">
+          Seguridad Global
+        </span>
+      </div>
+      <p class="text-muted small mb-0 mt-1">
+        Define los privilegios de acceso atómicos para cada rol operativo del sistema.
+      </p>
+    </div>
+
+    <!-- Botones de Acción Global -->
+    <div class="d-flex align-items-center gap-2">
+      @if (hasUnsavedChanges()) {
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          [disabled]="isSaving()"
+          (click)="resetChanges()"
+        >
+          Descartar Cambios
+        </button>
+      }
+
+      <button
+        type="button"
+        class="btn btn-primary btn-sm d-flex align-items-center gap-2 shadow-sm"
+        [disabled]="isSaving() || !hasUnsavedChanges()"
+        (click)="saveRolePermissions()"
+      >
+        @if (isSaving()) {
+          <div class="spinner-border spinner-border-sm" role="status"></div>
+          <span>Guardando...</span>
+        } @else {
+          <i class="bi bi-shield-check"></i>
+          <span>Guardar Permisos</span>
+        }
+      </button>
+    </div>
+  </header>
+
+  <!-- MENSAJES DE ESTADO -->
+  @if (errorMessage()) {
+    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm py-2 mb-3" role="alert">
+      <i class="bi bi-exclamation-triangle-fill fs-5 text-danger"></i>
+      <div class="flex-grow-1 small">{{ errorMessage() }}</div>
+      <button type="button" class="btn-close p-2" aria-label="Close" (click)="errorMessage.set(null)"></button>
+    </div>
+  }
+
+  @if (successMessage()) {
+    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm py-2 mb-3" role="alert">
+      <i class="bi bi-check-circle-fill fs-5 text-success"></i>
+      <div class="flex-grow-1 small">{{ successMessage() }}</div>
+      <button type="button" class="btn-close p-2" aria-label="Close" (click)="successMessage.set(null)"></button>
+    </div>
+  }
+
+  @if (hasUnsavedChanges()) {
+    <div class="alert alert-warning py-2 mb-3 d-flex align-items-center justify-content-between small shadow-sm">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-info-circle-fill fs-5 text-warning-emphasis"></i>
+        <span>Tienes cambios pendientes de guardar en los permisos del rol <strong>{{ selectedRol()?.rol_name }}</strong>.</span>
+      </div>
+      <button type="button" class="btn btn-sm btn-dark py-1 px-3" [disabled]="isSaving()" (click)="saveRolePermissions()">
+        Guardar Ahora
+      </button>
+    </div>
+  }
+
+  <div class="row g-4">
+    <!-- COLUMNA IZQUIERDA: SELECTOR DE ROLES -->
+    <div class="col-12 col-lg-3">
+      <div class="card border-0 shadow-sm rounded-3 p-3">
+        <div class="small fw-semibold text-muted text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.05em;">
+          Roles del Sistema
+        </div>
+
+        <div class="d-flex flex-column gap-2">
+          @for (r of roles(); track r.rol_uuid) {
+            <button
+              type="button"
+              class="role-select-item p-3 rounded-3 text-start border d-flex align-items-center justify-content-between gap-2"
+              [class.active]="r.rol_uuid === selectedRolUuid()"
+              (click)="selectRole(r.rol_uuid)"
+            >
+              <div>
+                <div class="fw-bold role-title">{{ r.rol_name }}</div>
+                <small class="text-muted d-block font-monospace" style="font-size: 0.68rem;">
+                  ID: {{ r.rol_uuid.substring(0, 12) }}...
+                </small>
+              </div>
+              <span class="badge border" [ngClass]="getRoleBadgeClass(r.rol_name)" style="font-size: 0.7rem;">
+                {{ r.rol_uuid === selectedRolUuid() ? (assignedCount() + ' asignados') : 'Seleccionar' }}
+              </span>
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- COLUMNA DERECHA: MATRIZ DE PERMISOS -->
+    <div class="col-12 col-lg-9">
+      <!-- Toolbar de Filtros y Acciones Rápidas -->
+      <section class="card border-0 shadow-sm rounded-3 p-3 mb-3">
+        <div class="row g-2 align-items-center">
+          <div class="col-12 col-md-5">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-white border-end-0 text-muted">
+                <i class="bi bi-search"></i>
+              </span>
+              <input
+                type="text"
+                class="form-control border-start-0"
+                placeholder="Buscar permiso por slug o descripción..."
+                [ngModel]="searchQuery()"
+                (ngModelChange)="searchQuery.set($event)"
+              />
+              @if (searchQuery()) {
+                <button class="btn btn-outline-secondary border-start-0" type="button" (click)="searchQuery.set('')">
+                  <i class="bi bi-x"></i>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="col-12 col-md-3">
+            <select
+              class="form-select form-select-sm"
+              [ngModel]="selectedModuleFilter()"
+              (ngModelChange)="selectedModuleFilter.set($event)"
+            >
+              <option value="all">Todos los módulos</option>
+              @for (mod of availableModules(); track mod) {
+                <option [value]="mod">{{ mod }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="col-12 col-md-4 text-md-end d-flex align-items-center justify-content-md-end gap-2">
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              (click)="selectAllFiltered()"
+              title="Marcar todos los permisos visibles"
+            >
+              Marcar Todos
+            </button>
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              (click)="deselectAllFiltered()"
+              title="Desmarcar todos los permisos visibles"
+            >
+              Desmarcar
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Contenedor de la Matriz Agrupada por Módulo -->
+      @if (isLoading()) {
+        <div class="card border-0 shadow-sm rounded-3 p-5 text-center text-muted">
+          <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+          <span>Cargando matriz de permisos del rol...</span>
+        </div>
+      } @else if (groupedPermissions().length === 0) {
+        <div class="card border-0 shadow-sm rounded-3 p-5 text-center text-muted">
+          <i class="bi bi-shield-slash fs-1 text-secondary opacity-50 d-block mb-2"></i>
+          <div class="fw-semibold">No se encontraron permisos</div>
+          <small class="text-muted">Prueba cambiando los términos de búsqueda o el filtro de módulo.</small>
+        </div>
+      } @else {
+        <div class="d-flex flex-column gap-3">
+          @for (group of groupedPermissions(); track group.moduleName) {
+            <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+              <!-- Cabecera del Módulo -->
+              <div class="p-3 bg-light border-bottom d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge bg-dark px-2 py-1" style="font-size: 0.75rem;">
+                    {{ group.moduleName }}
+                  </span>
+                  <span class="text-muted small">
+                    ({{ group.items.length }} {{ group.items.length === 1 ? 'permiso' : 'permisos' }})
+                  </span>
+                </div>
+
+                <div>
+                  @if (isGroupFullyAssigned(group)) {
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-link text-decoration-none text-muted p-0 small"
+                      (click)="deselectAllInGroup(group)"
+                    >
+                      Desmarcar grupo
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-link text-decoration-none text-primary p-0 small"
+                      (click)="selectAllInGroup(group)"
+                    >
+                      Marcar todo el grupo
+                    </button>
+                  }
+                </div>
+              </div>
+
+              <!-- Lista de Permisos del Módulo -->
+              <div class="p-3">
+                <div class="row g-2">
+                  @for (p of group.items; track p.per_uuid) {
+                    <div class="col-12 col-md-6">
+                      <div
+                        class="permission-card p-2 px-3 rounded-2 border d-flex align-items-center gap-3"
+                        [class.active-permission]="isPermissionAssigned(p.per_uuid)"
+                        (click)="togglePermission(p.per_uuid)"
+                      >
+                        <div class="form-check mb-0">
+                          <input
+                            type="checkbox"
+                            class="form-check-input"
+                            [checked]="isPermissionAssigned(p.per_uuid)"
+                            (click)="$event.stopPropagation()"
+                            (change)="togglePermission(p.per_uuid)"
+                            id="perm_{{ p.per_uuid }}"
+                          />
+                        </div>
+
+                        <div class="flex-grow-1 text-truncate">
+                          <div class="d-flex align-items-center gap-2">
+                            <span class="font-monospace small fw-bold text-dark slug-text">
+                              {{ p.per_slug }}
+                            </span>
+                          </div>
+                          @if (p.per_description) {
+                            <small class="text-muted text-truncate d-block" style="font-size: 0.75rem;">
+                              {{ p.per_description }}
+                            </small>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+</div>

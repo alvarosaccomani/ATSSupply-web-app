@@ -1,0 +1,57 @@
+.roles-permissions-container {
+  padding-bottom: 3rem;
+
+  .role-select-item {
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+
+    &:hover {
+      background-color: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    &.active {
+      background-color: #ffffff;
+      border-color: #0f4c81 !important;
+      box-shadow: 0 0.25rem 0.75rem rgba(15, 76, 129, 0.12);
+
+      .role-title {
+        color: #0f4c81;
+      }
+    }
+
+    .role-title {
+      font-size: 0.95rem;
+    }
+  }
+
+  .permission-card {
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    user-select: none;
+
+    &:hover {
+      background-color: #f8fafc;
+      border-color: #94a3b8;
+    }
+
+    &.active-permission {
+      background-color: #f0fdf4;
+      border-color: #86efac !important;
+
+      .slug-text {
+        color: #166534 !important;
+      }
+    }
+
+    .form-check-input {
+      cursor: pointer;
+    }
+
+    .slug-text {
+      font-size: 0.78rem;
+    }
+  }
+}
