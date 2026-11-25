@@ -1,16 +1,21 @@
 import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { CompanyContextService } from '@services/company-context';
 import { ProductService } from '@services/products';
 import { OrderService } from '@services/orders';
 import { ProductionOrderService } from '@services/production-orders';
 import { MachineService } from '@services/machines';
+import { MenusService } from '@services/menus';
+import { CompanyMenusService } from '@services/company-menus';
 import { OrderInterface, OrderStatus as BackendOrderStatus } from '@interfaces/order';
 import { ProductionOrderInterface } from '@interfaces/production-order';
 import { MachineInterface } from '@interfaces/machine';
 import { ProductInterface } from '@interfaces/product';
+import { MenuItemTree, MenuInterface } from '@interfaces/menu';
+import { CompanyMenuInterface } from '@interfaces/company-menu';
 
 export interface DashboardStockItem {
   id: string;
@@ -41,6 +46,14 @@ export interface DashboardProductionLog {
   time: string;
 }
 
+export interface DashboardShortcutItem {
+  key: string;
+  route: string;
+  title: string;
+  icon: string;
+  order: number;
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -54,9 +67,29 @@ export class DashboardComponent implements OnInit {
   private readonly _orderService = inject(OrderService);
   private readonly _productionOrderService = inject(ProductionOrderService);
   private readonly _machineService = inject(MachineService);
+  private readonly _menusService = inject(MenusService);
+  private readonly _companyMenusService = inject(CompanyMenusService);
 
   readonly showProduction = this._companyContext.canProduce;
   readonly showSales = this._companyContext.hasSales;
+  readonly role = this._companyContext.activeRole;
+
+  // Permisos según rol operativo
+  readonly showOrdersHistory = computed<boolean>(
+    () => this.showSales() && (this.role() === 'OWNER' || this.role() === 'SELLER')
+  );
+  readonly showCustomers = computed<boolean>(
+    () => this.showSales() && (this.role() === 'OWNER' || this.role() === 'SELLER')
+  );
+  readonly showProducts = computed<boolean>(
+    () => this.role() === 'OWNER' || this.role() === 'SELLER'
+  );
+  readonly showPriceTiers = computed<boolean>(() => this.role() === 'OWNER');
+  readonly showMachines = computed<boolean>(
+    () => this.showProduction() && this.role() === 'OWNER'
+  );
+  readonly showStockMovements = computed<boolean>(() => this.role() === 'OWNER');
+  readonly showTeam = computed<boolean>(() => this.role() === 'OWNER');
 
   // Estados de carga y feedback
   readonly isLoading = signal<boolean>(false);
@@ -70,6 +103,86 @@ export class DashboardComponent implements OnInit {
 
   // Lotes recientes de Producción
   readonly productionLogs = signal<DashboardProductionLog[]>([]);
+
+  // Menús y Overrides para Atajos de Dashboard
+  private rawMenuTree = signal<MenuItemTree[]>([]);
+  private rawCompanyOverrides = signal<CompanyMenuInterface[]>([]);
+
+  // Fallback vacío por defecto (ningún atajo visible hasta que la empresa lo marque explícitamente)
+  private defaultShortcuts: DashboardShortcutItem[] = [];
+
+  // Atajos computados y filtrados dinámicamente
+  readonly shortcuts = computed<DashboardShortcutItem[]>(() => {
+    const rawTree = this.rawMenuTree();
+    const overrides = this.rawCompanyOverrides();
+
+    if (!rawTree || rawTree.length === 0) {
+      return [];
+    }
+
+    const ovMap = new Map<string, CompanyMenuInterface>();
+    overrides.forEach((ov) => ovMap.set(ov.mnu_uuid, ov));
+
+    const list: DashboardShortcutItem[] = [];
+
+    const processNode = (node: MenuItemTree) => {
+      const ov = ovMap.get(node.mnu_uuid);
+
+      // Por defecto la visibilidad en Dashboard es false a menos que el override de la empresa lo active explícitamente en true
+      const showOnDash = (ov && ov.cmpmnu_showondashboard !== null && ov.cmpmnu_showondashboard !== undefined)
+        ? !!ov.cmpmnu_showondashboard
+        : false;
+
+      const active = (ov && ov.cmpmnu_active !== null && ov.cmpmnu_active !== undefined)
+        ? ov.cmpmnu_active
+        : node.mnu_active;
+
+      if (showOnDash && active) {
+        const title = (ov && (ov.cmpmnu_dashboardtitle || ov.cmpmnu_title))
+          ? (ov.cmpmnu_dashboardtitle || ov.cmpmnu_title)!
+          : (node.mnu_dashboardtitle || node.mnu_title);
+
+        const icon = (ov && (ov.cmpmnu_dashboardicon || ov.cmpmnu_icon))
+          ? (ov.cmpmnu_dashboardicon || ov.cmpmnu_icon)!
+          : (node.mnu_dashboardicon || node.mnu_icon || 'bi-grid-fill');
+
+        const order = (ov && ov.cmpmnu_order !== null && ov.cmpmnu_order !== undefined)
+          ? ov.cmpmnu_order
+          : node.mnu_order;
+
+        let cleanRoute = (node.mnu_route || '').trim();
+        if (cleanRoute.startsWith('/admin/user/')) {
+          cleanRoute = cleanRoute.replace('/admin/user/', '');
+        } else if (cleanRoute.startsWith('/')) {
+          cleanRoute = cleanRoute.substring(1);
+        }
+
+        if (cleanRoute && cleanRoute !== 'dashboard') {
+          list.push({
+            key: node.mnu_cod || cleanRoute || node.mnu_uuid,
+            route: `/admin/user/${cleanRoute}`,
+            title,
+            icon,
+            order,
+          });
+        }
+      }
+
+      if (node.items && node.items.length > 0) {
+        node.items.forEach((child) => processNode(child));
+      }
+    };
+
+    rawTree.forEach((root) => processNode(root));
+
+    if (list.length === 0) {
+      return [];
+    }
+
+    const filtered = this._filterShortcutsByRbac(list);
+    filtered.sort((a, b) => a.order - b.order);
+    return filtered;
+  });
 
   // KPIs Financieros y de Despacho Reactivos
   readonly kpiTotalBags = computed<number>(() =>
@@ -94,12 +207,48 @@ export class DashboardComponent implements OnInit {
       const comp = this._companyContext.activeCompany();
       if (comp?.cmp_uuid) {
         this.loadDashboardData();
+        this.loadMenuShortcuts(comp.cmp_uuid);
       }
     });
   }
 
   public ngOnInit(): void {
     this.loadDashboardData();
+    const cmpUuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (cmpUuid) {
+      this.loadMenuShortcuts(cmpUuid);
+    }
+  }
+
+  private loadMenuShortcuts(cmpUuid: string): void {
+    forkJoin({
+      tree: this._menusService.getMenuTree().pipe(catchError(() => of({ data: [] }))),
+      overrides: this._companyMenusService.getCompanyMenus(cmpUuid).pipe(catchError(() => of({ data: [] }))),
+    }).subscribe({
+      next: ({ tree, overrides }) => {
+        this.rawMenuTree.set(tree.data || []);
+        this.rawCompanyOverrides.set(overrides.data || []);
+      },
+    });
+  }
+
+  private _filterShortcutsByRbac(items: DashboardShortcutItem[]): DashboardShortcutItem[] {
+    return items.filter((item) => {
+      const r = item.route.toLowerCase();
+
+      if (r.includes('production') && !this.showProduction()) return false;
+      if (r.includes('new-order') && !this.showSales()) return false;
+      if (r.includes('delivery') && !this._companyContext.canDeliver()) return false;
+      if (r.includes('orders') && !this.showOrdersHistory()) return false;
+      if (r.includes('customers') && !this.showCustomers()) return false;
+      if (r.includes('products') && !this.showProducts()) return false;
+      if (r.includes('price-tiers') && !this.showPriceTiers()) return false;
+      if (r.includes('machines') && !this.showMachines()) return false;
+      if (r.includes('stock-movements') && !this.showStockMovements()) return false;
+      if (r.includes('team') && !this.showTeam()) return false;
+
+      return true;
+    });
   }
 
   public loadDashboardData(): void {
