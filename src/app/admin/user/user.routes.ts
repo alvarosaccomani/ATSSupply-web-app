@@ -47,6 +47,10 @@ export const USER_ROUTES: Routes = [
         loadComponent: () => import('./stock-movements/stock-movements').then((m) => m.StockMovements)
       },
       {
+        path: 'team',
+        loadComponent: () => import('./team/team').then((m) => m.Team)
+      },
+      {
         path: '',
         redirectTo: 'dashboard',
         pathMatch: 'full'
