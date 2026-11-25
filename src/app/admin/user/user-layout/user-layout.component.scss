@@ -64,6 +64,19 @@
   .sidebar-user-section {
     background: rgba(0, 0, 0, 0.15);
 
+    .user-profile-link {
+      transition: opacity 0.15s ease;
+      cursor: pointer;
+
+      &:hover {
+        opacity: 0.9;
+
+        .user-name-hover {
+          text-decoration: underline;
+        }
+      }
+    }
+
     .logout-btn:hover {
       color: #ff6b6b !important;
     }
@@ -118,6 +131,20 @@
   background: #ffffff;
   border-bottom: 1px solid var(--ats-border, #e2e8f0);
   padding: 14px 24px;
+
+  .user-header-profile-link {
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+
+    &:hover {
+      opacity: 0.85;
+
+      .user-name-header-hover {
+        color: var(--ats-primary, #0f4c81) !important;
+        text-decoration: underline;
+      }
+    }
+  }
 }
 
 /* Bottom Navigation (Solo Celular < 768px) */
