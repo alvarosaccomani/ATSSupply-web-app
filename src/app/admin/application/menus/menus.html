@@ -1,1 +1,513 @@
-<p>menus works!</p>
+<div class="menus-container">
+  <!-- ENCABEZADO -->
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+      <h2 class="h4 fw-bold text-dark mb-1">
+        <i class="bi bi-diagram-3 text-primary me-2"></i>Catálogo Maestro de Menús del Sistema
+      </h2>
+      <p class="text-muted small mb-0">
+        Defina los módulos, submenús y rutas de navegación base que heredan todos los tenants de la plataforma.
+      </p>
+    </div>
+
+    <div>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm px-3"
+        (click)="openCreateModal(null)"
+      >
+        <i class="bi bi-plus-lg"></i>
+        <span>Nuevo Menú Raíz</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ALERTAS -->
+  @if (errorMessage()) {
+    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2" role="alert">
+      <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+      <div>{{ errorMessage() }}</div>
+      <button type="button" class="btn-close" (click)="errorMessage.set(null)"></button>
+    </div>
+  }
+
+  @if (successMessage()) {
+    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2" role="alert">
+      <i class="bi bi-check-circle-fill fs-5"></i>
+      <div>{{ successMessage() }}</div>
+      <button type="button" class="btn-close" (click)="successMessage.set(null)"></button>
+    </div>
+  }
+
+  <!-- BARRA DE BÚSQUEDA Y ESTADÍSTICAS -->
+  <div class="card border-0 shadow-sm rounded-3 mb-4">
+    <div class="card-body p-3">
+      <div class="row g-3 align-items-center">
+        <!-- Búsqueda -->
+        <div class="col-12 col-md-6">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-light border-end-0">
+              <i class="bi bi-search text-muted"></i>
+            </span>
+            <input
+              type="text"
+              class="form-control bg-light border-start-0"
+              placeholder="Buscar por título, ruta o código..."
+              [ngModel]="searchTerm()"
+              (ngModelChange)="searchTerm.set($event)"
+            />
+            @if (searchTerm()) {
+              <button class="btn btn-outline-secondary" type="button" (click)="searchTerm.set('')">
+                <i class="bi bi-x"></i>
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- KPI Resumen -->
+        <div class="col-12 col-md-6 text-md-end">
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 fw-semibold">
+            <i class="bi bi-check-circle-fill me-1"></i>{{ totalActive() }} de {{ allMenusFlat().length }} Menús Activos
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPINNER DE CARGA -->
+  @if (isLoading()) {
+    <div class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Cargando...</span>
+      </div>
+      <p class="text-muted small mt-2">Cargando catálogo maestro de navegación...</p>
+    </div>
+  } @else if (filteredMenuTree().length === 0) {
+    <!-- ESTADO VACÍO -->
+    <div class="card border-0 shadow-sm rounded-3 text-center py-5">
+      <div class="card-body">
+        <i class="bi bi-diagram-2 fs-1 text-muted"></i>
+        <h5 class="fw-bold text-dark mt-2">No se encontraron menús</h5>
+        <p class="text-muted small mb-3">No hay ítems registrados en el catálogo maestro.</p>
+        <button type="button" class="btn btn-outline-primary btn-sm" (click)="openCreateModal(null)">
+          <i class="bi bi-plus-lg me-1"></i>Crear Primer Menú
+        </button>
+      </div>
+    </div>
+  } @else {
+    <!-- TABLA JERÁRQUICA DE MENÚS -->
+    <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light text-muted small text-uppercase">
+            <tr>
+              <th style="min-width: 250px;">Ítem / Ruta Angular</th>
+              <th style="width: 130px;">Código</th>
+              <th style="width: 90px;" class="text-center">Ícono</th>
+              <th style="width: 80px;" class="text-center">Orden</th>
+              <th style="width: 100px;" class="text-center">Activo</th>
+              <th style="width: 150px;" class="text-center">Visibilidad Empresa</th>
+              <th class="text-end" style="width: 140px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (root of filteredMenuTree(); track root.mnu_uuid) {
+              <!-- Fila Módulo Raíz -->
+              <tr class="root-row">
+                <!-- Nombre y Ruta -->
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">
+                      <i class="bi {{ root.mnu_icon || 'bi-circle' }}"></i>
+                    </span>
+                    <div>
+                      <div class="fw-bold text-dark">{{ root.mnu_title }}</div>
+                      <small class="text-muted font-monospace">{{ root.mnu_route || 'Módulo Contenedor (Sin Ruta)' }}</small>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Código -->
+                <td>
+                  <span class="font-monospace small text-muted">{{ root.mnu_cod || '-' }}</span>
+                </td>
+
+                <!-- Ícono -->
+                <td class="text-center">
+                  <i class="bi {{ root.mnu_icon || 'bi-circle' }} fs-5 text-secondary"></i>
+                </td>
+
+                <!-- Orden -->
+                <td class="text-center font-monospace small">
+                  {{ root.mnu_order }}
+                </td>
+
+                <!-- Switch Activo -->
+                <td class="text-center">
+                  <div class="form-check form-switch d-inline-block">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      [checked]="root.mnu_active"
+                      (change)="toggleActive(root)"
+                      title="Activar / Desactivar Menú"
+                    />
+                  </div>
+                </td>
+
+                <!-- Visibilidad Empresa -->
+                <td class="text-center">
+                  @if (root.mnu_showifcompanyactive) {
+                    <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1 small">
+                      Solo Empresa Activa
+                    </span>
+                  } @else {
+                    <span class="badge bg-light text-muted border px-2 py-1 small">
+                      Siempre Visible
+                    </span>
+                  }
+                </td>
+
+                <!-- Acciones -->
+                <td class="text-end">
+                  <div class="btn-group btn-group-sm">
+                    <button
+                      type="button"
+                      class="btn btn-outline-success"
+                      title="Agregar Submenú"
+                      (click)="openCreateModal(root.mnu_uuid)"
+                    >
+                      <i class="bi bi-node-plus"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary"
+                      title="Editar Menú"
+                      (click)="openEditModal(root)"
+                    >
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline-danger"
+                      title="Eliminar Menú"
+                      (click)="openDeleteModal(root)"
+                    >
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Submenús Hijos -->
+              @for (child of root.items; track child.mnu_uuid) {
+                <tr class="child-row">
+                  <!-- Nombre y Ruta indentada -->
+                  <td>
+                    <div class="d-flex align-items-center gap-2 ps-4">
+                      <i class="bi bi-arrow-return-right text-muted"></i>
+                      <span class="badge bg-light text-secondary border px-2 py-1">
+                        <i class="bi {{ child.mnu_icon || 'bi-circle' }}"></i>
+                      </span>
+                      <div>
+                        <div class="fw-semibold text-dark">{{ child.mnu_title }}</div>
+                        <small class="text-muted font-monospace">{{ child.mnu_route }}</small>
+                      </div>
+                    </div>
+                  </td>
+
+                  <!-- Código -->
+                  <td>
+                    <span class="font-monospace small text-muted">{{ child.mnu_cod || '-' }}</span>
+                  </td>
+
+                  <!-- Ícono -->
+                  <td class="text-center">
+                    <i class="bi {{ child.mnu_icon || 'bi-circle' }} fs-5 text-secondary"></i>
+                  </td>
+
+                  <!-- Orden -->
+                  <td class="text-center font-monospace small">
+                    {{ child.mnu_order }}
+                  </td>
+
+                  <!-- Switch Activo -->
+                  <td class="text-center">
+                    <div class="form-check form-switch d-inline-block">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        [checked]="child.mnu_active"
+                        (change)="toggleActive(child)"
+                        title="Activar / Desactivar Menú"
+                      />
+                    </div>
+                  </td>
+
+                  <!-- Visibilidad Empresa -->
+                  <td class="text-center">
+                    @if (child.mnu_showifcompanyactive) {
+                      <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1 small">
+                        Solo Empresa Activa
+                      </span>
+                    } @else {
+                      <span class="badge bg-light text-muted border px-2 py-1 small">
+                        Siempre Visible
+                      </span>
+                    }
+                  </td>
+
+                  <!-- Acciones -->
+                  <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary"
+                        title="Editar Submenú"
+                        (click)="openEditModal(child)"
+                      >
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-danger"
+                        title="Eliminar Submenú"
+                        (click)="openDeleteModal(child)"
+                      >
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+</div>
+
+<!-- MODAL CREAR / EDITAR MENÚ -->
+@if (isModalOpen()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom py-3">
+          <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2">
+            <i class="bi bi-diagram-3 text-primary"></i>
+            {{ isEditing() ? 'Editar Ítem de Menú' : 'Nuevo Ítem de Menú' }}
+          </h5>
+          <button type="button" class="btn-close" (click)="closeModal()" [disabled]="isSaving()"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <form (ngSubmit)="saveMenu()">
+            <div class="row g-3">
+              <!-- Menú Padre (Opcional) -->
+              <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold text-muted">Módulo Contenedor / Padre</label>
+                <select
+                  class="form-select form-select-sm"
+                  [(ngModel)]="formData().mnu_parent_uuid"
+                  name="mnu_parent_uuid"
+                >
+                  <option [ngValue]="null">-- Es Menú Raíz (Sin Padre) --</option>
+                  @for (parent of parentOptions(); track parent.mnu_uuid) {
+                    <option [value]="parent.mnu_uuid">{{ parent.mnu_title }}</option>
+                  }
+                </select>
+              </div>
+
+              <!-- Código Único -->
+              <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold text-muted">Código Técnico (Código)</label>
+                <input
+                  type="text"
+                  class="form-control form-control-sm font-monospace text-uppercase"
+                  placeholder="EJ: MNU_PROD_DASH"
+                  [(ngModel)]="formData().mnu_cod"
+                  name="mnu_cod"
+                />
+              </div>
+
+              <!-- Título -->
+              <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold text-muted">Título del Menú *</label>
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  placeholder="EJ: Producción e Insumos"
+                  [(ngModel)]="formData().mnu_title"
+                  name="mnu_title"
+                  required
+                />
+              </div>
+
+              <!-- Ruta Angular -->
+              <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold text-muted">Ruta Angular (Route)</label>
+                <input
+                  type="text"
+                  class="form-control form-control-sm font-monospace"
+                  placeholder="EJ: production o /admin/user/production"
+                  [(ngModel)]="formData().mnu_route"
+                  name="mnu_route"
+                />
+              </div>
+
+              <!-- Ícono Bootstrap -->
+              <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold text-muted">Ícono (Bootstrap Icons) *</label>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-light">
+                    <i class="bi {{ formData().mnu_icon || 'bi-circle' }}"></i>
+                  </span>
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="bi-gear-fill"
+                    [(ngModel)]="formData().mnu_icon"
+                    name="mnu_icon"
+                  />
+                </div>
+              </div>
+
+              <!-- Orden -->
+              <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold text-muted">Orden de Aparición *</label>
+                <input
+                  type="number"
+                  class="form-control form-control-sm"
+                  min="0"
+                  [(ngModel)]="formData().mnu_order"
+                  name="mnu_order"
+                  required
+                />
+              </div>
+
+              <!-- Descripción -->
+              <div class="col-12">
+                <label class="form-label small fw-semibold text-muted">Descripción Explicativa</label>
+                <textarea
+                  class="form-control form-control-sm"
+                  rows="2"
+                  placeholder="Finalidad del módulo en el sistema..."
+                  [(ngModel)]="formData().mnu_description"
+                  name="mnu_description"
+                ></textarea>
+              </div>
+
+              <!-- Flags y Switches -->
+              <div class="col-12">
+                <div class="d-flex flex-wrap gap-4 p-3 bg-light rounded-3">
+                  <div class="form-check form-switch">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      id="mnuActiveSwitch"
+                      [(ngModel)]="formData().mnu_active"
+                      name="mnu_active"
+                    />
+                    <label class="form-check-label small fw-semibold" for="mnuActiveSwitch">
+                      Activo Globalmente
+                    </label>
+                  </div>
+
+                  <div class="form-check form-switch">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      id="mnuCompanyActiveSwitch"
+                      [(ngModel)]="formData().mnu_showifcompanyactive"
+                      name="mnu_showifcompanyactive"
+                    />
+                    <label class="form-check-label small fw-semibold" for="mnuCompanyActiveSwitch">
+                      Visible solo si Empresa Activa
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="modal-footer border-top py-2 px-4 bg-light">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeModal()" [disabled]="isSaving()">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm px-3"
+            (click)="saveMenu()"
+            [disabled]="isSaving()"
+          >
+            @if (isSaving()) {
+              <span class="spinner-border spinner-border-sm" role="status"></span>
+              <span>Guardando...</span>
+            } @else {
+              <i class="bi bi-check-lg"></i>
+              <span>{{ isEditing() ? 'Actualizar Menú' : 'Crear Menú' }}</span>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- MODAL CONFIRMAR ELIMINACIÓN -->
+@if (isDeleteModalOpen() && menuToDelete()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom py-3">
+          <h5 class="modal-title fw-bold text-danger d-flex align-items-center gap-2">
+            <i class="bi bi-trash"></i> Eliminar Ítem de Menú
+          </h5>
+          <button type="button" class="btn-close" (click)="closeDeleteModal()" [disabled]="isSaving()"></button>
+        </div>
+
+        <div class="modal-body p-4 text-center">
+          <div class="delete-icon-circle mx-auto mb-3 bg-danger-subtle text-danger">
+            <i class="bi bi-exclamation-triangle fs-2"></i>
+          </div>
+          <h6 class="fw-bold text-dark mb-1">
+            ¿Está seguro de eliminar el menú "{{ menuToDelete()?.mnu_title }}"?
+          </h6>
+          <p class="text-muted small font-monospace mb-2">
+            Ruta: {{ menuToDelete()?.mnu_route || 'Módulo Contenedor' }}
+          </p>
+          <p class="text-muted small mb-0">
+            Esta acción eliminará la definición base del menú. Si alguna empresa tiene personalizaciones dependientes, podrían verse afectadas.
+          </p>
+        </div>
+
+        <div class="modal-footer border-top py-2 px-4 bg-light">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDeleteModal()" [disabled]="isSaving()">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger btn-sm d-inline-flex align-items-center gap-1 shadow-sm px-3"
+            (click)="confirmDelete()"
+            [disabled]="isSaving()"
+          >
+            @if (isSaving()) {
+              <span class="spinner-border spinner-border-sm" role="status"></span>
+              <span>Eliminando...</span>
+            } @else {
+              <i class="bi bi-trash me-1"></i> Confirmar Eliminación
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
