@@ -60,6 +60,9 @@ export class UserLayoutComponent {
   readonly showStockMovements = computed<boolean>(
     () => this.role() === 'OWNER'
   );
+  readonly showTeam = computed<boolean>(
+    () => this.role() === 'OWNER'
+  );
 
   // Nombre formateado e iniciales
   readonly userName = computed<string>(() => {
