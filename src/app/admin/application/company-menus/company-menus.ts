@@ -96,8 +96,8 @@ export class CompanyMenus implements OnInit {
         ? ov.cmpmnu_active
         : node.mnu_active;
       const effectiveShowOnDashboard = (ov && ov.cmpmnu_showondashboard !== null && ov.cmpmnu_showondashboard !== undefined)
-        ? ov.cmpmnu_showondashboard
-        : !!node.mnu_showondashboard;
+        ? !!ov.cmpmnu_showondashboard
+        : false;
 
       const children = (node.items || []).map((child) => mergeNode(child));
       children.sort((a, b) => a.effectiveOrder - b.effectiveOrder);
@@ -223,7 +223,7 @@ export class CompanyMenus implements OnInit {
       cmpmnu_description: item.override?.cmpmnu_description || item.base.mnu_description || '',
       cmpmnu_icon: item.override?.cmpmnu_icon || item.base.mnu_icon || 'bi-circle',
       cmpmnu_order: item.override?.cmpmnu_order ?? item.base.mnu_order,
-      cmpmnu_showondashboard: item.override?.cmpmnu_showondashboard ?? (!!item.base.mnu_showondashboard),
+      cmpmnu_showondashboard: item.override?.cmpmnu_showondashboard ?? false,
       cmpmnu_active: item.override?.cmpmnu_active ?? item.base.mnu_active,
     });
     this.isModalOpen.set(true);
