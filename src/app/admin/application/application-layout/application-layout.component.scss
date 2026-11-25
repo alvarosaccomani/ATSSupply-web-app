@@ -1,3 +1,118 @@
-.application-layout-container {
+.sysadmin-shell {
+  display: flex;
   min-height: 100vh;
+
+  .ats-sidebar {
+    width: 250px;
+    background: linear-gradient(180deg, #091e3a 0%, #11294d 100%);
+    color: #fff;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+
+    .sidebar-brand {
+      padding: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .sidebar-nav {
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-grow: 1;
+      overflow-y: auto;
+    }
+
+    .sidebar-btn {
+      text-decoration: none;
+      border: none;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.78);
+      text-align: left;
+      padding: 11px 14px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.15s ease;
+      width: 100%;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+
+      &.active {
+        background: #ffffff;
+        color: #091e3a;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      &.back-operative-btn {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px dashed rgba(255, 255, 255, 0.2);
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.4);
+        }
+      }
+    }
+
+    .sidebar-user-section {
+      background: rgba(0, 0, 0, 0.2);
+
+      .logout-btn:hover {
+        color: #ff6b6b !important;
+      }
+    }
+  }
+
+  .user-avatar-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+
+    &.small-avatar {
+      width: 32px;
+      height: 32px;
+      background: #091e3a;
+      color: #ffffff;
+      font-size: 0.75rem;
+      border: none;
+    }
+  }
+
+  .app-main {
+    flex-grow: 1;
+    min-width: 0;
+    padding-bottom: 24px;
+    background-color: #f8fafc;
+  }
+
+  .mobile-topbar {
+    background: linear-gradient(135deg, #091e3a 0%, #11294d 100%);
+    color: #fff;
+  }
+
+  .desktop-topbar {
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 14px 24px;
+  }
 }
