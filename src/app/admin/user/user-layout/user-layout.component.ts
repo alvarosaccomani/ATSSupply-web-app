@@ -42,6 +42,9 @@ export class UserLayoutComponent {
   readonly showProduction = this.companyContext.canProduce;
   readonly showOrders = this.companyContext.canTakeOrders;
   readonly showDelivery = this.companyContext.canDeliver;
+  readonly showOrdersHistory = computed<boolean>(
+    () => this.companyContext.hasSales() && (this.role() === 'OWNER' || this.role() === 'SELLER')
+  );
   readonly showCustomers = computed<boolean>(
     () => this.companyContext.hasSales() && (this.role() === 'OWNER' || this.role() === 'SELLER')
   );
