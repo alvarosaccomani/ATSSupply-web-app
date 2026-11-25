@@ -297,6 +297,13 @@
         </div>
 
         <div class="modal-body p-4">
+          @if (errorMessage()) {
+            <div class="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3 small" role="alert">
+              <i class="bi bi-exclamation-triangle-fill fs-5 text-danger"></i>
+              <div class="flex-grow-1">{{ errorMessage() }}</div>
+            </div>
+          }
+
           <!-- Selector de Modo: Nuevo vs Existente -->
           <div class="btn-group w-100 mb-4" role="group">
             <button
