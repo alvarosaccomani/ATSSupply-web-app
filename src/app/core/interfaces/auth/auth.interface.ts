@@ -5,6 +5,7 @@ export interface AuthUser {
   usr_surname: string;
   usr_email: string;
   usr_image?: string | null;
+  usr_bio?: string | null;
 }
 
 export interface AuthInterface {
