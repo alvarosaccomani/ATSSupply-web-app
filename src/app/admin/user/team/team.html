@@ -1,1 +1,526 @@
-<p>team works!</p>
+<div class="team-container">
+  <!-- ENCABEZADO -->
+  <header class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h3 fw-bold mb-0 text-dark">Equipo y Colaboradores</h1>
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+          {{ activeCompany()?.cmp_name || 'Empresa Activa' }}
+        </span>
+      </div>
+      <p class="text-muted small mb-0 mt-1">
+        Nómina consolidada por colaborador, asignación multirrol y control de accesos operativos.
+      </p>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1 shadow-sm"
+        [disabled]="isLoading() || isSaving()"
+        (click)="loadInitialData()"
+        title="Recargar datos"
+      >
+        <i class="bi bi-arrow-clockwise" [class.spin]="isLoading()"></i>
+        <span>Actualizar</span>
+      </button>
+
+      <button
+        type="button"
+        class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm"
+        [disabled]="isSaving()"
+        (click)="openAddModal()"
+      >
+        <i class="bi bi-person-plus-fill"></i>
+        <span>Incorporar Colaborador</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MENSAJES DE ESTADO -->
+  @if (errorMessage()) {
+    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm py-2" role="alert">
+      <i class="bi bi-exclamation-triangle-fill fs-5 text-danger"></i>
+      <div class="flex-grow-1 small">{{ errorMessage() }}</div>
+      <button type="button" class="btn-close p-2" aria-label="Close" (click)="errorMessage.set(null)"></button>
+    </div>
+  }
+
+  @if (successMessage()) {
+    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm py-2" role="alert">
+      <i class="bi bi-check-circle-fill fs-5 text-success"></i>
+      <div class="flex-grow-1 small">{{ successMessage() }}</div>
+      <button type="button" class="btn-close p-2" aria-label="Close" (click)="successMessage.set(null)"></button>
+    </div>
+  }
+
+  <!-- KPIS / RESUMEN -->
+  <section class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="card kpi-card border-0 shadow-sm rounded-3 p-3">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Colaboradores</span>
+            <div class="h3 fw-bold mb-0 text-dark">{{ totalMembers() }}</div>
+          </div>
+          <div class="kpi-icon-circle bg-primary-subtle text-primary">
+            <i class="bi bi-people-fill fs-4"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+      <div class="card kpi-card border-0 shadow-sm rounded-3 p-3">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Administración / Dueños</span>
+            <div class="h3 fw-bold mb-0 text-danger">{{ countOwners() }}</div>
+          </div>
+          <div class="kpi-icon-circle bg-danger-subtle text-danger">
+            <i class="bi bi-shield-lock-fill fs-4"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+      <div class="card kpi-card border-0 shadow-sm rounded-3 p-3">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Ventas y POS</span>
+            <div class="h3 fw-bold mb-0 text-success">{{ countSellers() }}</div>
+          </div>
+          <div class="kpi-icon-circle bg-success-subtle text-success">
+            <i class="bi bi-cart-check-fill fs-4"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+      <div class="card kpi-card border-0 shadow-sm rounded-3 p-3">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Logística / Choferes</span>
+            <div class="h3 fw-bold mb-0 text-warning">{{ countDrivers() }}</div>
+          </div>
+          <div class="kpi-icon-circle bg-warning-subtle text-warning">
+            <i class="bi bi-truck fs-4"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BARRA DE FILTROS Y BÚSQUEDA -->
+  <section class="card border-0 shadow-sm rounded-3 p-3 mb-4">
+    <div class="row g-2 align-items-center">
+      <div class="col-12 col-md-6 col-lg-7">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white border-end-0 text-muted">
+            <i class="bi bi-search"></i>
+          </span>
+          <input
+            type="text"
+            class="form-control border-start-0"
+            placeholder="Buscar colaborador por nombre, nick, email o rol..."
+            [ngModel]="searchQuery()"
+            (ngModelChange)="searchQuery.set($event)"
+          />
+          @if (searchQuery()) {
+            <button class="btn btn-outline-secondary border-start-0" type="button" (click)="searchQuery.set('')">
+              <i class="bi bi-x"></i>
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="col-12 col-md-4 col-lg-3">
+        <select
+          class="form-select form-select-sm"
+          [ngModel]="selectedRoleFilter()"
+          (ngModelChange)="selectedRoleFilter.set($event)"
+        >
+          <option value="">Todos los roles</option>
+          @for (role of availableRoles(); track role.rol_uuid) {
+            <option [value]="role.rol_uuid">{{ role.rol_name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="col-12 col-md-2 col-lg-2 text-md-end">
+        <span class="badge bg-light text-dark border py-2 px-3 w-100 w-md-auto">
+          {{ filteredMembers().length }} {{ filteredMembers().length === 1 ? 'colaborador' : 'colaboradores' }}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- TABLA DE COLABORADORES CONSOLIDADA POR USUARIO -->
+  <section class="card border-0 shadow-sm rounded-3 overflow-hidden">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light text-muted small text-uppercase">
+          <tr>
+            <th class="ps-4" style="min-width: 240px;">Colaborador</th>
+            <th style="min-width: 200px;">Contacto</th>
+            <th style="min-width: 280px;">Roles Asignados en Empresa</th>
+            <th style="min-width: 150px;">Fecha Incorporación</th>
+            <th class="text-end pe-4" style="min-width: 140px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (isLoading()) {
+            <tr>
+              <td colspan="5" class="text-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                <span>Cargando colaboradores del equipo...</span>
+              </td>
+            </tr>
+          } @else if (filteredMembers().length === 0) {
+            <tr>
+              <td colspan="5" class="text-center py-5 text-muted">
+                <i class="bi bi-people fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                <div class="fw-semibold">No se encontraron colaboradores</div>
+                <small class="text-muted">Prueba ajustando los filtros o incorpora a un nuevo integrante.</small>
+              </td>
+            </tr>
+          } @else {
+            @for (m of filteredMembers(); track m.usr_uuid) {
+              <tr>
+                <!-- Colaborador -->
+                <td class="ps-4 py-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="member-avatar">
+                      {{ getInitials(m.usr_name, m.usr_surname, m.usr_nick) }}
+                    </div>
+                    <div>
+                      <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                        <span>{{ m.usr_name }} {{ m.usr_surname || '' }}</span>
+                        @if (isCurrentSessionUser(m)) {
+                          <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-1" style="font-size: 0.65rem;">
+                            Vos
+                          </span>
+                        }
+                      </div>
+                      <small class="text-muted d-block">&#64;{{ m.usr_nick }}</small>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Contacto -->
+                <td>
+                  <div class="small text-dark">{{ m.usr_email }}</div>
+                  @if (m.usr_phone) {
+                    <small class="text-muted"><i class="bi bi-telephone me-1"></i>{{ m.usr_phone }}</small>
+                  }
+                </td>
+
+                <!-- Roles con Chips Múltiples y Selector para Agregar -->
+                <td>
+                  <div class="d-flex flex-wrap align-items-center gap-2">
+                    @for (r of m.roles; track r.rol_uuid) {
+                      <span class="badge-role-chip" [ngClass]="getRoleBadgeClass(r.rol_name)">
+                        <span class="role-text">{{ r.rol_name }}</span>
+                        @if (m.roles.length > 1 || !isCurrentSessionUser(m)) {
+                          <button
+                            type="button"
+                            class="btn-remove-role"
+                            title="Quitar rol {{ r.rol_name }}"
+                            [disabled]="isSaving()"
+                            (click)="removeRoleFromMember(m, r)"
+                          >
+                            <i class="bi bi-x"></i>
+                          </button>
+                        }
+                      </span>
+                    }
+
+                    <!-- Selector para agregar rol adicional si tiene roles pendientes -->
+                    @if (getAvailableRolesForMember(m).length > 0) {
+                      <div class="add-role-select-box">
+                        <select
+                          class="form-select form-select-sm add-role-select"
+                          (change)="addRoleToMember(m, $any($event.target).value); $any($event.target).value = ''"
+                          [disabled]="isSaving()"
+                          title="Asignar rol adicional"
+                        >
+                          <option value="" selected disabled>+ Rol...</option>
+                          @for (opt of getAvailableRolesForMember(m); track opt.rol_uuid) {
+                            <option [value]="opt.rol_uuid">{{ opt.rol_name }}</option>
+                          }
+                        </select>
+                      </div>
+                    }
+                  </div>
+                </td>
+
+                <!-- Fecha de alta -->
+                <td class="small text-muted">
+                  {{ m.firstJoinedAt ? (m.firstJoinedAt | date:'dd/MM/yyyy HH:mm') : '-' }}
+                </td>
+
+                <!-- Acciones -->
+                <td class="text-end pe-4">
+                  <button
+                    type="button"
+                    class="btn btn-outline-danger btn-sm p-1 px-2"
+                    title="Desvincular colaborador de la empresa"
+                    [disabled]="isSaving() || isCurrentSessionUser(m)"
+                    (click)="confirmUnlink(m)"
+                  >
+                    <i class="bi bi-person-x"></i>
+                    <span class="d-none d-lg-inline ms-1">Desvincular</span>
+                  </button>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<!-- MODAL: INCORPORAR COLABORADOR -->
+@if (isAddModalOpen()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content shadow border-0 rounded-3">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-person-plus-fill text-primary me-2"></i>Incorporar Colaborador al Equipo
+          </h5>
+          <button type="button" class="btn-close" (click)="closeAddModal()" [disabled]="isSaving()"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <!-- Selector de Modo: Nuevo vs Existente -->
+          <div class="btn-group w-100 mb-4" role="group">
+            <button
+              type="button"
+              class="btn"
+              [class.btn-primary]="addMode() === 'new'"
+              [class.btn-outline-primary]="addMode() !== 'new'"
+              (click)="addMode.set('new')"
+            >
+              <i class="bi bi-person-plus me-1"></i>Crear Nuevo Usuario
+            </button>
+            <button
+              type="button"
+              class="btn"
+              [class.btn-primary]="addMode() === 'existing'"
+              [class.btn-outline-primary]="addMode() !== 'existing'"
+              (click)="addMode.set('existing')"
+            >
+              <i class="bi bi-link-45deg me-1"></i>Vincular Usuario Existente
+            </button>
+          </div>
+
+          <!-- MODO: CREAR NUEVO USUARIO -->
+          @if (addMode() === 'new') {
+            <form (ngSubmit)="submitAddCollaborator()">
+              <div class="row g-3">
+                <div class="col-12 col-md-6">
+                  <label class="form-label small fw-semibold">Nombre <span class="text-danger">*</span></label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Ej. Martín"
+                    [ngModel]="newUsrName()"
+                    (ngModelChange)="newUsrName.set($event)"
+                    name="newUsrName"
+                    required
+                  />
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label small fw-semibold">Apellido</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Ej. Gómez"
+                    [ngModel]="newUsrSurname()"
+                    (ngModelChange)="newUsrSurname.set($event)"
+                    name="newUsrSurname"
+                  />
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label small fw-semibold">Nombre de Usuario (Nick) <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <span class="input-group-text">&#64;</span>
+                    <input
+                      type="text"
+                      class="form-control"
+                      placeholder="mgomez"
+                      [ngModel]="newUsrNick()"
+                      (ngModelChange)="newUsrNick.set($event)"
+                      name="newUsrNick"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label small fw-semibold">Correo Electrónico <span class="text-danger">*</span></label>
+                  <input
+                    type="email"
+                    class="form-control"
+                    placeholder="martin@empresa.com"
+                    [ngModel]="newUsrEmail()"
+                    (ngModelChange)="newUsrEmail.set($event)"
+                    name="newUsrEmail"
+                    required
+                  />
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label small fw-semibold">Contraseña Inicial <span class="text-danger">*</span></label>
+                  <input
+                    type="password"
+                    class="form-control"
+                    placeholder="••••••••"
+                    [ngModel]="newUsrPassword()"
+                    (ngModelChange)="newUsrPassword.set($event)"
+                    name="newUsrPassword"
+                    required
+                  />
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label small fw-semibold">Rol Inicial en la Empresa <span class="text-danger">*</span></label>
+                  <select
+                    class="form-select"
+                    [ngModel]="newRolUuid()"
+                    (ngModelChange)="newRolUuid.set($event)"
+                    name="newRolUuid"
+                    required
+                  >
+                    @for (r of availableRoles(); track r.rol_uuid) {
+                      <option [value]="r.rol_uuid">{{ r.rol_name }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+            </form>
+          } @else {
+            <!-- MODO: VINCULAR EXISTENTE -->
+            <form (ngSubmit)="submitAddCollaborator()">
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label small fw-semibold">Seleccionar Usuario Registrado <span class="text-danger">*</span></label>
+                  <select
+                    class="form-select"
+                    [ngModel]="existingUsrUuid()"
+                    (ngModelChange)="existingUsrUuid.set($event)"
+                    name="existingUsrUuid"
+                    required
+                  >
+                    <option value="">-- Elige un usuario registrado --</option>
+                    @for (user of availableExistingUsers(); track user.usr_uuid) {
+                      <option [value]="user.usr_uuid">
+                        {{ user.usr_name }} {{ user.usr_surname }} (&#64;{{ user.usr_nick }}) - {{ user.usr_email }}
+                      </option>
+                    }
+                  </select>
+                  @if (availableExistingUsers().length === 0) {
+                    <small class="text-muted d-block mt-1">
+                      Todos los usuarios registrados ya forman parte de esta compañía. Usa la opción "Crear Nuevo Usuario".
+                    </small>
+                  }
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label small fw-semibold">Rol Asignado en {{ activeCompany()?.cmp_name }} <span class="text-danger">*</span></label>
+                  <select
+                    class="form-select"
+                    [ngModel]="existingRolUuid()"
+                    (ngModelChange)="existingRolUuid.set($event)"
+                    name="existingRolUuid"
+                    required
+                  >
+                    @for (r of availableRoles(); track r.rol_uuid) {
+                      <option [value]="r.rol_uuid">{{ r.rol_name }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+            </form>
+          }
+        </div>
+
+        <div class="modal-footer border-top">
+          <button
+            type="button"
+            class="btn btn-outline-secondary"
+            (click)="closeAddModal()"
+            [disabled]="isSaving()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary d-flex align-items-center gap-2"
+            (click)="submitAddCollaborator()"
+            [disabled]="isSaving()"
+          >
+            @if (isSaving()) {
+              <div class="spinner-border spinner-border-sm" role="status"></div>
+              <span>Guardando...</span>
+            } @else {
+              <i class="bi bi-check2"></i>
+              <span>Incorporar Colaborador</span>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- MODAL: CONFIRMAR DESVINCULACIÓN TOTAL -->
+@if (memberToUnlink()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content shadow border-0 rounded-3">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold text-danger">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>Desvincular Colaborador
+          </h5>
+          <button type="button" class="btn-close" (click)="cancelUnlink()" [disabled]="isSaving()"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="mb-2">
+            ¿Estás seguro de que deseas desvincular a
+            <strong>{{ memberToUnlink()?.usr_name }} {{ memberToUnlink()?.usr_surname || '' }}</strong>
+            de la empresa <strong>{{ activeCompany()?.cmp_name }}</strong>?
+          </p>
+          <div class="alert alert-warning py-2 mb-2 small">
+            Se removerán todos sus roles en esta compañía ({{ memberToUnlink()?.roles?.length }} {{ memberToUnlink()?.roles?.length === 1 ? 'rol' : 'roles' }}).
+          </div>
+          <small class="text-muted d-block">
+            El usuario perderá de forma inmediata el acceso a esta empresa. Su cuenta de usuario permanecerá en el sistema.
+          </small>
+        </div>
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-outline-secondary" (click)="cancelUnlink()" [disabled]="isSaving()">
+            Cancelar
+          </button>
+          <button type="button" class="btn btn-danger d-flex align-items-center gap-2" (click)="executeUnlink()" [disabled]="isSaving()">
+            @if (isSaving()) {
+              <div class="spinner-border spinner-border-sm" role="status"></div>
+              <span>Desvinculando...</span>
+            } @else {
+              <i class="bi bi-person-dash"></i>
+              <span>Confirmar Desvinculación Total</span>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

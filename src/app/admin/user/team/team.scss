@@ -1,0 +1,153 @@
+.team-container {
+  padding-bottom: 3rem;
+
+  .kpi-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    background-color: #ffffff;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08) !important;
+    }
+
+    .kpi-icon-circle {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+
+  .member-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 2px solid #e2e8f0;
+  }
+
+  // Chips de Rol con soporte multirrol y remoción
+  .badge-role-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.2;
+    transition: all 0.15s ease-in-out;
+    border: 1px solid transparent;
+
+    .role-text {
+      white-space: nowrap;
+    }
+
+    .btn-remove-role {
+      background: transparent;
+      border: none;
+      padding: 0;
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: currentColor;
+      opacity: 0.65;
+      font-size: 0.85rem;
+      cursor: pointer;
+      line-height: 1;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+
+      &:hover:not(:disabled) {
+        opacity: 1;
+        transform: scale(1.2);
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.3;
+      }
+    }
+
+    &.badge-role-owner {
+      background-color: #fee2e2;
+      color: #991b1b;
+      border-color: #fca5a5;
+    }
+
+    &.badge-role-seller {
+      background-color: #dcfce7;
+      color: #166534;
+      border-color: #86efac;
+    }
+
+    &.badge-role-driver {
+      background-color: #fef3c7;
+      color: #92400e;
+      border-color: #fde68a;
+    }
+
+    &.badge-role-production {
+      background-color: #e0f2fe;
+      color: #075985;
+      border-color: #bae6fd;
+    }
+
+    &.badge-role-default {
+      background-color: #f1f5f9;
+      color: #334155;
+      border-color: #cbd5e1;
+    }
+  }
+
+  // Selector para incorporar rol adicional a un colaborador
+  .add-role-select-box {
+    display: inline-block;
+
+    .add-role-select {
+      font-size: 0.72rem;
+      padding-top: 0.2rem;
+      padding-bottom: 0.2rem;
+      padding-left: 0.5rem;
+      padding-right: 1.5rem;
+      border-style: dashed;
+      border-color: #94a3b8;
+      background-color: #f8fafc;
+      color: #475569;
+      font-weight: 500;
+      border-radius: 9999px;
+      cursor: pointer;
+      width: auto;
+
+      &:hover:not(:disabled) {
+        border-color: #3b82f6;
+        color: #1d4ed8;
+        background-color: #eff6ff;
+      }
+
+      &:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 0.15rem rgba(59, 130, 246, 0.2);
+      }
+    }
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+}
