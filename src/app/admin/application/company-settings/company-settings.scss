@@ -1,0 +1,32 @@
+.company-settings-container {
+  min-height: calc(100vh - 120px);
+}
+
+.empty-icon-circle {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background-color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bg-purple-subtle {
+  background-color: #f3e8ff;
+}
+
+.text-purple {
+  color: #7e22ce;
+}
+
+.border-purple-subtle {
+  border-color: #e9d5ff !important;
+}
+
+.json-preview {
+  max-width: 320px;
+  max-height: 80px;
+  overflow: auto;
+  font-size: 0.75rem;
+}
