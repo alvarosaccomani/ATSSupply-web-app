@@ -23,6 +23,10 @@ export const APPLICATION_ROUTES: Routes = [
         loadComponent: () => import('./company-settings/company-settings').then((m) => m.CompanySettings)
       },
       {
+        path: 'company-menus',
+        loadComponent: () => import('./company-menus/company-menus').then((m) => m.CompanyMenus)
+      },
+      {
         path: '',
         redirectTo: 'companies',
         pathMatch: 'full'
