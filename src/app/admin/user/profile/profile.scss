@@ -1,0 +1,63 @@
+.profile-container {
+  padding-bottom: 3rem;
+
+  .profile-hero {
+    background-color: #ffffff;
+  }
+
+  .profile-avatar-large {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--ats-primary-dark, #093256) 0%, var(--ats-primary, #0f4c81) 100%);
+    color: #ffffff;
+    font-size: 1.6rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(9, 50, 86, 0.2);
+    border: 3px solid #ffffff;
+  }
+
+  .badge-role-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+
+    &.badge-role-owner {
+      background-color: #fee2e2;
+      color: #991b1b;
+      border-color: #fca5a5;
+    }
+
+    &.badge-role-seller {
+      background-color: #dcfce7;
+      color: #166534;
+      border-color: #86efac;
+    }
+
+    &.badge-role-driver {
+      background-color: #fef3c7;
+      color: #92400e;
+      border-color: #fde68a;
+    }
+
+    &.badge-role-production {
+      background-color: #e0f2fe;
+      color: #075985;
+      border-color: #bae6fd;
+    }
+
+    &.badge-role-default {
+      background-color: #f1f5f9;
+      color: #334155;
+      border-color: #cbd5e1;
+    }
+  }
+}

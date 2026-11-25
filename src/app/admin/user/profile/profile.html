@@ -1,1 +1,256 @@
-<p>profile works!</p>
+<div class="profile-container">
+  <!-- HERO / ENCABEZADO DE PERFIL -->
+  <header class="card border-0 shadow-sm rounded-3 p-4 mb-4 profile-hero">
+    <div class="d-flex flex-column flex-sm-row align-items-center gap-3">
+      <div class="profile-avatar-large">
+        {{ userInitials() }}
+      </div>
+      <div class="text-center text-sm-start flex-grow-1">
+        <h1 class="h3 fw-bold mb-1 text-dark">{{ displayName() }}</h1>
+        <div class="text-muted small mb-2 d-flex flex-wrap justify-content-center justify-content-sm-start align-items-center gap-2">
+          <span><i class="bi bi-at"></i>{{ nick() }}</span>
+          <span>•</span>
+          <span><i class="bi bi-envelope me-1"></i>{{ email() }}</span>
+        </div>
+        <div class="d-flex flex-wrap justify-content-center justify-content-sm-start gap-2">
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+            <i class="bi bi-building me-1"></i>{{ activeCompany()?.cmp_name || 'Alvi Hielo' }}
+          </span>
+          <span class="badge bg-dark px-2 py-1">
+            <i class="bi bi-person-badge me-1"></i>{{ currentRoleLabel() }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="row g-4">
+    <!-- COLUMNA IZQUIERDA: DATOS PERSONALES -->
+    <div class="col-12 col-lg-7">
+      <div class="card border-0 shadow-sm rounded-3 p-4 h-100">
+        <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
+          <i class="bi bi-person-circle fs-4 text-primary"></i>
+          <div>
+            <h2 class="h5 fw-bold mb-0 text-dark">Información Personal</h2>
+            <small class="text-muted">Actualiza tus datos de contacto e identidad en el sistema</small>
+          </div>
+        </div>
+
+        @if (personalSuccessMessage()) {
+          <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 py-2 small shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill text-success fs-5"></i>
+            <div>{{ personalSuccessMessage() }}</div>
+          </div>
+        }
+
+        @if (personalErrorMessage()) {
+          <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 py-2 small shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+            <div>{{ personalErrorMessage() }}</div>
+          </div>
+        }
+
+        <form (ngSubmit)="savePersonalInfo()">
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">Nombre <span class="text-danger">*</span></label>
+              <input
+                type="text"
+                class="form-control"
+                placeholder="Nombre"
+                [ngModel]="name()"
+                (ngModelChange)="name.set($event)"
+                name="name"
+                required
+              />
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">Apellido</label>
+              <input
+                type="text"
+                class="form-control"
+                placeholder="Apellido"
+                [ngModel]="surname()"
+                (ngModelChange)="surname.set($event)"
+                name="surname"
+              />
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">Nombre de Usuario (Nick) <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text">&#64;</span>
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="usuario"
+                  [ngModel]="nick()"
+                  (ngModelChange)="nick.set($event)"
+                  name="nick"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">Correo Electrónico <span class="text-danger">*</span></label>
+              <input
+                type="email"
+                class="form-control"
+                placeholder="correo@ejemplo.com"
+                [ngModel]="email()"
+                (ngModelChange)="email.set($event)"
+                name="email"
+                required
+              />
+            </div>
+
+            <div class="col-12">
+              <label class="form-label small fw-semibold">Biografía / Notas</label>
+              <textarea
+                class="form-control"
+                rows="3"
+                placeholder="Notas o descripción personal breve..."
+                [ngModel]="bio()"
+                (ngModelChange)="bio.set($event)"
+                name="bio"
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end mt-4">
+            <button
+              type="submit"
+              class="btn btn-primary d-flex align-items-center gap-2 px-3 shadow-sm"
+              [disabled]="isSavingPersonal()"
+            >
+              @if (isSavingPersonal()) {
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <span>Guardando...</span>
+              } @else {
+                <i class="bi bi-check2"></i>
+                <span>Guardar Cambios</span>
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- COLUMNA DERECHA: SEGURIDAD Y EMPRESAS -->
+    <div class="col-12 col-lg-5 d-flex flex-column gap-4">
+      <!-- CARD 2: SEGURIDAD Y CONTRASEÑA -->
+      <div class="card border-0 shadow-sm rounded-3 p-4">
+        <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
+          <i class="bi bi-shield-lock fs-4 text-warning"></i>
+          <div>
+            <h2 class="h5 fw-bold mb-0 text-dark">Seguridad de la Cuenta</h2>
+            <small class="text-muted">Modifica tu contraseña de acceso</small>
+          </div>
+        </div>
+
+        @if (passwordSuccessMessage()) {
+          <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 py-2 small shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill text-success fs-5"></i>
+            <div>{{ passwordSuccessMessage() }}</div>
+          </div>
+        }
+
+        @if (passwordErrorMessage()) {
+          <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 py-2 small shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+            <div>{{ passwordErrorMessage() }}</div>
+          </div>
+        }
+
+        <form (ngSubmit)="savePassword()">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Nueva Contraseña</label>
+            <input
+              type="password"
+              class="form-control"
+              placeholder="Mínimo 6 caracteres"
+              [ngModel]="newPassword()"
+              (ngModelChange)="newPassword.set($event)"
+              name="newPassword"
+              required
+            />
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Confirmar Nueva Contraseña</label>
+            <input
+              type="password"
+              class="form-control"
+              placeholder="Repite tu nueva contraseña"
+              [ngModel]="confirmPassword()"
+              (ngModelChange)="confirmPassword.set($event)"
+              name="confirmPassword"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            class="btn btn-outline-dark w-100 d-flex align-items-center justify-content-center gap-2"
+            [disabled]="isSavingPassword()"
+          >
+            @if (isSavingPassword()) {
+              <div class="spinner-border spinner-border-sm" role="status"></div>
+              <span>Actualizando...</span>
+            } @else {
+              <i class="bi bi-key-fill"></i>
+              <span>Actualizar Contraseña</span>
+            }
+          </button>
+        </form>
+      </div>
+
+      <!-- CARD 3: MEMBRESÍAS Y ROLES -->
+      <div class="card border-0 shadow-sm rounded-3 p-4">
+        <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
+          <i class="bi bi-building-check fs-4 text-info"></i>
+          <div>
+            <h2 class="h5 fw-bold mb-0 text-dark">Empresas y Roles</h2>
+            <small class="text-muted">Tus membresías activas en el ecosistema</small>
+          </div>
+        </div>
+
+        @if (isLoading()) {
+          <div class="text-center py-3 text-muted">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+            <small>Cargando roles asignados...</small>
+          </div>
+        } @else if (userCompanyRoles().length === 0) {
+          <div class="text-center py-3 text-muted small">
+            No se encontraron asignaciones de empresas registradas.
+          </div>
+        } @else {
+          <div class="list-group list-group-flush">
+            @for (item of userCompanyRoles(); track item.cmp_uuid + '_' + item.rol_uuid) {
+              <div class="list-group-item px-0 py-2 d-flex align-items-center justify-content-between">
+                <div>
+                  <div class="fw-semibold text-dark small d-flex align-items-center gap-2">
+                    <span>{{ item.cmp_name || 'Empresa' }}</span>
+                    @if (item.cmp_uuid === activeCompany()?.cmp_uuid) {
+                      <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">
+                        Activa
+                      </span>
+                    }
+                  </div>
+                  <small class="text-muted d-block" style="font-size: 0.75rem;">
+                    ID: {{ item.cmp_uuid }}
+                  </small>
+                </div>
+                <span class="badge-role-chip" [ngClass]="getRoleBadgeClass(item.rol?.rol_name || item.rol_name)">
+                  {{ item.rol?.rol_name || item.rol_name || 'Rol' }}
+                </span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>
