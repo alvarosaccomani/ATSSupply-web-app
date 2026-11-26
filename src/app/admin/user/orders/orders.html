@@ -335,6 +335,11 @@
             <div class="col-md-3 text-md-end">
               <label class="text-muted small text-uppercase fw-semibold" style="font-size: 0.68rem;">Total del Pedido</label>
               <div class="fs-4 fw-bold text-primary">${{ order.ord_totalamount | number }}</div>
+              @if (order.ord_status === 'CUENTA_CORRIENTE' && order.ord_paidamount && order.ord_paidamount > 0) {
+                <div class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle mt-1" style="font-size: 0.72rem;">
+                  Pagado: ${{ order.ord_paidamount | number }} (Resta: ${{ (order.ord_totalamount - order.ord_paidamount) | number }})
+                </div>
+              }
             </div>
           </div>
 
