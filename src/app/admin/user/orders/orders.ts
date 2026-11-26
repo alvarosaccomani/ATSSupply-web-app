@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { RouterLink, Router } from '@angular/router';
 import { CompanyContextService } from '@services/company-context';
 import { OrderService, OrderFilters } from '@services/orders';
 import { CustomerService } from '@services/customers';
@@ -22,6 +22,7 @@ export class Orders implements OnInit {
   private readonly _orderService = inject(OrderService);
   private readonly _customerService = inject(CustomerService);
   private readonly _productService = inject(ProductService);
+  private readonly _router = inject(Router);
 
   // Empresa activa
   readonly activeCompany = this._companyContext.activeCompany;
@@ -280,6 +281,18 @@ export class Orders implements OnInit {
           this.errorMessage.set(err.error?.message || 'No se pudo actualizar el estado del pedido.');
         }
       });
+  }
+
+  public goToCustomerCheckingAccount(order: OrderInterface): void {
+    if (this.selectedOrder()) {
+      this.closeDetailModal();
+    }
+    this._router.navigate(['/admin/user/customers'], {
+      queryParams: {
+        cus_uuid: order.cus_uuid,
+        openStatement: 'true'
+      }
+    });
   }
 
   public getCustomerName(order: OrderInterface): string {
