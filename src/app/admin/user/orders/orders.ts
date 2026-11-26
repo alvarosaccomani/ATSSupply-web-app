@@ -6,9 +6,11 @@ import { CompanyContextService } from '@services/company-context';
 import { OrderService, OrderFilters } from '@services/orders';
 import { CustomerService } from '@services/customers';
 import { ProductService } from '@services/products';
+import { OrderHistoryService } from '@services/order-history';
 import { OrderInterface, OrderStatus } from '@interfaces/order';
 import { CustomerInterface } from '@interfaces/customer';
 import { ProductInterface } from '@interfaces/product';
+import { OrderHistoryInterface } from '@interfaces/order-history';
 
 @Component({
   selector: 'app-orders',
@@ -22,6 +24,7 @@ export class Orders implements OnInit {
   private readonly _orderService = inject(OrderService);
   private readonly _customerService = inject(CustomerService);
   private readonly _productService = inject(ProductService);
+  private readonly _orderHistoryService = inject(OrderHistoryService);
   private readonly _router = inject(Router);
 
   // Empresa activa
@@ -37,6 +40,10 @@ export class Orders implements OnInit {
   readonly rawOrders = signal<OrderInterface[]>([]);
   readonly customers = signal<CustomerInterface[]>([]);
   readonly products = signal<ProductInterface[]>([]);
+
+  // Historial de cambios de estado del pedido seleccionado
+  readonly orderHistory = signal<OrderHistoryInterface[]>([]);
+  readonly isLoadingHistory = signal<boolean>(false);
 
   // Filtros reactivos
   readonly selectedStatus = signal<string>('');
@@ -203,6 +210,7 @@ export class Orders implements OnInit {
     this.isDetailModalOpen.set(true);
     this.selectedOrder.set(order);
     this.isFetchingDetail.set(true);
+    this.loadOrderHistory(order.ord_uuid);
 
     // Obtener detalle completo desde el backend para garantizar ítems
     this._orderService.getOrderById(cmp.cmp_uuid, order.ord_uuid).subscribe({
@@ -221,6 +229,28 @@ export class Orders implements OnInit {
   public closeDetailModal(): void {
     this.isDetailModalOpen.set(false);
     this.selectedOrder.set(null);
+    this.orderHistory.set([]);
+  }
+
+  public loadOrderHistory(ord_uuid: string): void {
+    const cmp = this.activeCompany();
+    if (!cmp?.cmp_uuid || !ord_uuid) return;
+
+    this.isLoadingHistory.set(true);
+    this.orderHistory.set([]);
+
+    this._orderHistoryService.getOrderHistory(cmp.cmp_uuid, ord_uuid).subscribe({
+      next: (res) => {
+        this.isLoadingHistory.set(false);
+        if (res?.data && Array.isArray(res.data)) {
+          this.orderHistory.set(res.data);
+        }
+      },
+      error: (err) => {
+        this.isLoadingHistory.set(false);
+        console.warn('No se pudo cargar el historial del pedido:', err);
+      }
+    });
   }
 
   public openCancelConfirmation(order: OrderInterface): void {
@@ -367,6 +397,25 @@ export class Orders implements OnInit {
         return 'Cancelado';
       default:
         return String(status);
+    }
+  }
+
+  public getStatusDotClass(status: string): string {
+    return 'dot-' + (status || '').toLowerCase();
+  }
+
+  public getStatusIcon(status: string): string {
+    switch (status) {
+      case 'PAGADO':
+        return 'bi-check2';
+      case 'CUENTA_CORRIENTE':
+        return 'bi-journal-check';
+      case 'ENTREGADO_DEBE':
+        return 'bi-clock-history';
+      case 'CANCELADO':
+        return 'bi-x-lg';
+      default:
+        return 'bi-box-seam';
     }
   }
 }

@@ -57,3 +57,89 @@
 .modal {
   z-index: 1055;
 }
+
+// Timeline Stepper de Trazabilidad
+.timeline-stepper {
+  position: relative;
+  padding-left: 32px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 12px;
+    top: 14px;
+    bottom: 14px;
+    width: 2px;
+    background: #e2e8f0;
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-bottom: 16px;
+
+    &:last-child {
+      padding-bottom: 4px;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -32px;
+      top: 6px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      background: #ffffff;
+      border: 2px solid #cbd5e1;
+      z-index: 2;
+      box-shadow: 0 0 0 3px #ffffff;
+
+      &.dot-pagado {
+        border-color: #10b981;
+        color: #10b981;
+        background: #ecfdf5;
+      }
+
+      &.dot-cuenta_corriente {
+        border-color: #8b5cf6;
+        color: #8b5cf6;
+        background: #f5f3ff;
+      }
+
+      &.dot-entregado_debe {
+        border-color: #06b6d4;
+        color: #06b6d4;
+        background: #ecfeff;
+      }
+
+      &.dot-pendiente_de_entrega {
+        border-color: #f59e0b;
+        color: #f59e0b;
+        background: #fffbeb;
+      }
+
+      &.dot-cancelado {
+        border-color: #ef4444;
+        color: #ef4444;
+        background: #fef2f2;
+      }
+    }
+
+    .timeline-card {
+      background: #f8fafc;
+      border: 1px solid #eef2f6;
+      border-radius: 10px;
+      padding: 10px 14px;
+      transition: all 0.15s ease;
+
+      &:hover {
+        background: #ffffff;
+        border-color: #cbd5e1;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+      }
+    }
+  }
+}
