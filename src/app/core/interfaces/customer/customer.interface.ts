@@ -11,6 +11,7 @@ export interface CustomerInterface {
   cus_notes?: string | null;
   cus_lat?: number | null;
   cus_lng?: number | null;
+  cus_hascredit?: boolean;
   cus_active: boolean;
   cus_createdat?: Date | string;
   cus_updatedat?: Date | string;

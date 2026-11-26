@@ -61,7 +61,14 @@
       <div class="ats-card p-3 d-flex flex-column justify-content-between h-100">
         <div>
           <div class="d-flex justify-content-between align-items-start mb-1">
-            <span class="fw-bold text-dark">{{ c.name }}</span>
+            <div class="d-flex align-items-center gap-1 flex-wrap">
+              <span class="fw-bold text-dark">{{ c.name }}</span>
+              @if (c.hasCredit) {
+                <span class="badge bg-info-subtle text-info border border-info-subtle fw-semibold" style="font-size: 0.65rem;">
+                  <i class="bi bi-journal-check me-1"></i>Cta. Cte.
+                </span>
+              }
+            </div>
             <span class="tier-badge ms-1" [ngClass]="'tier-' + c.tier">
               Cat {{ c.tier }}
             </span>
@@ -285,6 +292,27 @@
                 <option value="C">Lista C (Minorista / Kiosco)</option>
               }
             </select>
+          </div>
+
+          <!-- Cuenta Corriente Habilitada -->
+          <div class="p-3 bg-light rounded-3 mb-2 border">
+            <div class="form-check form-switch d-flex justify-content-between align-items-center ps-0 mb-0">
+              <label class="form-check-label small fw-semibold text-dark cursor-pointer mb-0" for="cusHasCreditSwitch">
+                <i class="bi bi-journal-check text-primary me-2 fs-5 align-middle"></i>
+                Habilitar Cuenta Corriente
+                <div class="text-muted fw-normal" style="font-size: 0.72rem;">
+                  Permite entregar mercadería a plazo (botón único "Entregado" en reparto).
+                </div>
+              </label>
+              <input
+                class="form-check-input ms-3 fs-5"
+                type="checkbox"
+                role="switch"
+                id="cusHasCreditSwitch"
+                [checked]="newCustomerHasCredit()"
+                (change)="newCustomerHasCredit.set(!newCustomerHasCredit())"
+              />
+            </div>
           </div>
         </div>
         <div class="modal-footer border-top">

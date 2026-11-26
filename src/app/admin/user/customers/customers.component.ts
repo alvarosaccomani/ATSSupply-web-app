@@ -16,6 +16,7 @@ export interface CustomerViewItem {
   tier: CustomerTierCode;
   address: string;
   phone: string;
+  hasCredit: boolean;
   lat?: number | null;
   lng?: number | null;
 }
@@ -50,6 +51,7 @@ export class CustomersComponent implements OnInit {
   readonly newCustomerAddress = signal<string>('');
   readonly newCustomerPhone = signal<string>('');
   readonly newCustomerTier = signal<CustomerTierCode>('C');
+  readonly newCustomerHasCredit = signal<boolean>(false);
   readonly newCustomerLat = signal<number | null>(null);
   readonly newCustomerLng = signal<number | null>(null);
   readonly isLocating = signal<boolean>(false);
@@ -133,6 +135,7 @@ export class CustomersComponent implements OnInit {
               tier: tierCode,
               address: c.cus_address || '',
               phone: c.cus_phone || '',
+              hasCredit: Boolean(c.cus_hascredit),
               lat: c.cus_lat !== undefined && c.cus_lat !== null ? Number(c.cus_lat) : null,
               lng: c.cus_lng !== undefined && c.cus_lng !== null ? Number(c.cus_lng) : null
             };
@@ -200,6 +203,7 @@ export class CustomersComponent implements OnInit {
     this.newCustomerAddress.set('');
     this.newCustomerPhone.set('');
     this.newCustomerTier.set('C');
+    this.newCustomerHasCredit.set(false);
     this.newCustomerLat.set(null);
     this.newCustomerLng.set(null);
     this.modalErrorMessage.set(null);
@@ -214,6 +218,7 @@ export class CustomersComponent implements OnInit {
     this.newCustomerAddress.set(customer.address);
     this.newCustomerPhone.set(customer.phone);
     this.newCustomerTier.set(customer.tier);
+    this.newCustomerHasCredit.set(Boolean(customer.hasCredit));
     this.newCustomerLat.set(customer.lat ?? null);
     this.newCustomerLng.set(customer.lng ?? null);
     this.modalErrorMessage.set(null);
@@ -228,6 +233,7 @@ export class CustomersComponent implements OnInit {
     this.editingCustomerId.set(null);
     this.newCustomerLat.set(null);
     this.newCustomerLng.set(null);
+    this.newCustomerHasCredit.set(false);
     this.modalErrorMessage.set(null);
     this.isSaving.set(false);
     this.isLocating.set(false);
@@ -270,6 +276,7 @@ export class CustomersComponent implements OnInit {
       cus_phone: this.newCustomerPhone().trim(),
       cus_lat: this.newCustomerLat(),
       cus_lng: this.newCustomerLng(),
+      cus_hascredit: this.newCustomerHasCredit(),
       cus_active: true
     };
 
