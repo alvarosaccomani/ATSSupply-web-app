@@ -101,6 +101,22 @@ export class OrderService {
   }
 
   /**
+   * Asigna o reasigna un chofer a uno o varios pedidos.
+   */
+  public assignDriverToOrders(
+    cmp_uuid: string,
+    ord_uuids: string[],
+    usr_uuid_driver: string | null
+  ): Observable<any> {
+    const headers = new HttpHeaders().set('content-type', 'application/json');
+    return this._http.put<any>(
+      `${environment.apiUrl}orders/assign-driver`,
+      { cmp_uuid, ord_uuids, usr_uuid_driver },
+      { headers }
+    );
+  }
+
+  /**
    * Elimina un pedido no entregado.
    */
   public deleteOrder(cmp_uuid: string, ord_uuid: string): Observable<any> {
