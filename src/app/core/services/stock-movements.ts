@@ -77,10 +77,11 @@ export class StockMovementsService {
   }
 
   /**
-   * Obtiene el estado actual de despacho de la camioneta para la empresa.
+   * Obtiene el estado actual de despacho de la camioneta para la empresa (o chofer específico).
    */
   public getDispatchStatus(
-    cmp_uuid: string
+    cmp_uuid: string,
+    driver_uuid?: string
   ): Observable<{
     success: boolean;
     data: {
@@ -90,6 +91,10 @@ export class StockMovementsService {
     };
   }> {
     const headers = new HttpHeaders().set('content-type', 'application/json');
+    let params = new HttpParams();
+    if (driver_uuid) {
+      params = params.set('driver_uuid', driver_uuid);
+    }
     return this._http.get<{
       success: boolean;
       data: {
@@ -97,7 +102,7 @@ export class StockMovementsService {
         lastMovementType: string | null;
         dispatchedAt: string | null;
       };
-    }>(`${environment.apiUrl}delivery/dispatch-status/${cmp_uuid}`, { headers });
+    }>(`${environment.apiUrl}delivery/dispatch-status/${cmp_uuid}`, { headers, params });
   }
 
   /**
@@ -106,12 +111,13 @@ export class StockMovementsService {
   public dispatchTruckLoad(
     cmp_uuid: string,
     items: { prd_uuid: string; quantity: number }[],
-    notes?: string
+    notes?: string,
+    driver_uuid?: string
   ): Observable<any> {
     const headers = new HttpHeaders().set('content-type', 'application/json');
     return this._http.post<any>(
       `${environment.apiUrl}delivery/dispatch-load`,
-      { cmp_uuid, items, notes },
+      { cmp_uuid, items, notes, driver_uuid },
       { headers }
     );
   }
@@ -122,12 +128,13 @@ export class StockMovementsService {
   public reconcileTruckReturn(
     cmp_uuid: string,
     items: { prd_uuid: string; quantity: number }[],
-    notes?: string
+    notes?: string,
+    driver_uuid?: string
   ): Observable<any> {
     const headers = new HttpHeaders().set('content-type', 'application/json');
     return this._http.post<any>(
       `${environment.apiUrl}delivery/reconcile-return`,
-      { cmp_uuid, items, notes },
+      { cmp_uuid, items, notes, driver_uuid },
       { headers }
     );
   }
