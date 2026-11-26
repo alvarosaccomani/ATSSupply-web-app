@@ -93,7 +93,18 @@ export class Products implements OnInit {
       list = list.filter((p) => p.prd_active !== false);
     }
 
-    return list;
+    // Ordenar categorías de precios (A, B, C...) en cada producto
+    return list.map((prod) => {
+      if (prod.prices && prod.prices.length > 1) {
+        const sortedPrices = [...prod.prices].sort((a, b) => {
+          const codeA = (a.priceTier?.prct_code || a.priceTier?.prct_name || '').toUpperCase();
+          const codeB = (b.priceTier?.prct_code || b.priceTier?.prct_name || '').toUpperCase();
+          return codeA.localeCompare(codeB, 'es', { numeric: true });
+        });
+        return { ...prod, prices: sortedPrices };
+      }
+      return prod;
+    });
   });
 
   // KPIs computados
@@ -126,7 +137,13 @@ export class Products implements OnInit {
     this._priceTierService.getPriceTiers(cmpUuid).subscribe({
       next: (res) => {
         const tiers = Array.isArray(res) ? res : res?.data || [];
-        this.priceTiers.set(tiers.filter((t: PriceTierInterface) => t.prct_active !== false));
+        const activeTiers = tiers.filter((t: PriceTierInterface) => t.prct_active !== false);
+        activeTiers.sort((a: PriceTierInterface, b: PriceTierInterface) => {
+          const codeA = (a.prct_code || a.prct_name || '').toUpperCase();
+          const codeB = (b.prct_code || b.prct_name || '').toUpperCase();
+          return codeA.localeCompare(codeB, 'es', { numeric: true });
+        });
+        this.priceTiers.set(activeTiers);
       },
       error: (err) => console.warn('Aviso: no se pudieron cargar listas de precios', err)
     });
