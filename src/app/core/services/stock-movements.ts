@@ -77,6 +77,30 @@ export class StockMovementsService {
   }
 
   /**
+   * Obtiene el estado actual de despacho de la camioneta para la empresa.
+   */
+  public getDispatchStatus(
+    cmp_uuid: string
+  ): Observable<{
+    success: boolean;
+    data: {
+      isDispatched: boolean;
+      lastMovementType: string | null;
+      dispatchedAt: string | null;
+    };
+  }> {
+    const headers = new HttpHeaders().set('content-type', 'application/json');
+    return this._http.get<{
+      success: boolean;
+      data: {
+        isDispatched: boolean;
+        lastMovementType: string | null;
+        dispatchedAt: string | null;
+      };
+    }>(`${environment.apiUrl}delivery/dispatch-status/${cmp_uuid}`, { headers });
+  }
+
+  /**
    * Despacha la carga de la camioneta descontando de cámara el consolidado de estiba.
    */
   public dispatchTruckLoad(
