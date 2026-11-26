@@ -1,4 +1,5 @@
 import { OrderDetailInterface } from '../order-detail/order-detail.interface';
+import { CustomerInterface } from '../customer/customer.interface';
 
 export type OrderStatus =
   | 'PENDIENTE_DE_ENTREGA'
@@ -20,6 +21,7 @@ export interface OrderInterface {
   ord_notes?: string | null;
   ord_createdat?: Date | string;
   ord_updatedat?: Date | string;
+  customer?: CustomerInterface;
   details?: OrderDetailInterface[];
 }
 
