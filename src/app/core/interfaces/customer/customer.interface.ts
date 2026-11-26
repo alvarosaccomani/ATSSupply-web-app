@@ -12,6 +12,7 @@ export interface CustomerInterface {
   cus_lat?: number | null;
   cus_lng?: number | null;
   cus_hascredit?: boolean;
+  cus_currentbalance?: number;
   cus_active: boolean;
   cus_createdat?: Date | string;
   cus_updatedat?: Date | string;
