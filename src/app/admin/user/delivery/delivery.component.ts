@@ -21,6 +21,7 @@ export interface DeliveryOrderItem {
   notes?: string;
   total: number;
   status: DeliveryStatus;
+  hasCredit: boolean;
   items: { productId: string; qty: number }[];
 }
 
@@ -255,6 +256,7 @@ export class DeliveryComponent implements OnInit, OnDestroy {
               notes: ord.ord_notes || '',
               total: Number(ord.ord_totalamount) || 0,
               status: this._mapToDeliveryStatus(ord.ord_status as OrderStatus),
+              hasCredit: Boolean((ord as any).customer?.cus_hascredit),
               items: rawDetails.map((d: any) => ({
                 productId: d.prd_uuid,
                 qty: Number(d.ordd_quantity) || 0

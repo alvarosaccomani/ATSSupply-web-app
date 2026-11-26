@@ -141,7 +141,14 @@
         <div class="ats-card delivery-card p-3 p-lg-4">
           <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2 mb-2">
             <div>
-              <span class="fw-bold fs-5 text-dark">{{ order.customerName }}</span>
+              <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold fs-5 text-dark">{{ order.customerName }}</span>
+                @if (order.hasCredit) {
+                  <span class="badge bg-info-subtle text-info border border-info-subtle fw-semibold" style="font-size: 0.65rem;">
+                    <i class="bi bi-journal-check me-1"></i>CTA. CTE.
+                  </span>
+                }
+              </div>
               <div class="text-muted small mt-1">
                 <i class="bi bi-geo-alt-fill text-danger me-1"></i>{{ order.address }}
                 @if (order.phone) {
@@ -177,32 +184,37 @@
 
           <!-- Botones de Acción Rápida para el Chofer / Repartidor -->
           <div class="d-flex flex-wrap gap-2 pt-2 border-top">
-            <button
-              type="button"
-              class="btn btn-success btn-sm flex-grow-1 d-flex align-items-center justify-content-center gap-1 shadow-sm py-2"
-              (click)="markDeliveryStatus(order.id, 'PAGADO')"
-            >
-              <i class="bi bi-check2-circle fs-5"></i>
-              <span class="fw-semibold">Cobrado / Pagado</span>
-            </button>
+            @if (order.hasCredit) {
+              <!-- Cliente con Cuenta Corriente: Solo botón Entregado -->
+              <button
+                type="button"
+                class="btn btn-primary btn-sm flex-grow-1 d-flex align-items-center justify-content-center gap-2 shadow-sm py-2"
+                (click)="markDeliveryStatus(order.id, 'CUENTA CORRIENTE')"
+              >
+                <i class="bi bi-check2-circle fs-5"></i>
+                <span class="fw-bold fs-6">Entregado</span>
+                <span class="badge bg-white text-primary rounded-pill small ms-1" style="font-size: 0.65rem;">Cta. Cte.</span>
+              </button>
+            } @else {
+              <!-- Cliente sin Cuenta Corriente: Opciones de cobranza en mano -->
+              <button
+                type="button"
+                class="btn btn-success btn-sm flex-grow-1 d-flex align-items-center justify-content-center gap-1 shadow-sm py-2"
+                (click)="markDeliveryStatus(order.id, 'PAGADO')"
+              >
+                <i class="bi bi-cash-stack fs-5"></i>
+                <span class="fw-semibold">Cobrado / Pagado</span>
+              </button>
 
-            <button
-              type="button"
-              class="btn btn-warning btn-sm text-dark flex-grow-1 d-flex align-items-center justify-content-center gap-1 shadow-sm py-2"
-              (click)="markDeliveryStatus(order.id, 'ENTREGADO DEBE')"
-            >
-              <i class="bi bi-clock-history fs-5"></i>
-              <span class="fw-semibold">Entregado (Debe)</span>
-            </button>
-
-            <button
-              type="button"
-              class="btn btn-info btn-sm text-white flex-grow-1 d-flex align-items-center justify-content-center gap-1 shadow-sm py-2"
-              (click)="markDeliveryStatus(order.id, 'CUENTA CORRIENTE')"
-            >
-              <i class="bi bi-file-earmark-text fs-5"></i>
-              <span class="fw-semibold">Cta. Cte.</span>
-            </button>
+              <button
+                type="button"
+                class="btn btn-warning btn-sm text-dark flex-grow-1 d-flex align-items-center justify-content-center gap-1 shadow-sm py-2"
+                (click)="markDeliveryStatus(order.id, 'ENTREGADO DEBE')"
+              >
+                <i class="bi bi-clock-history fs-5"></i>
+                <span class="fw-semibold">Entregado (Debe)</span>
+              </button>
+            }
           </div>
         </div>
       } @empty {
