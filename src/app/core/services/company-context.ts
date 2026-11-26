@@ -4,7 +4,7 @@ import { CompanyInterface } from '@interfaces/company';
 import { UserRolCompanyInterface, UserRolCompanyResultsInterface } from '@interfaces/user-rol-company';
 import { UserRolesCompanyService } from './user-roles-company';
 
-export type UserRole = 'OWNER' | 'SELLER' | 'DRIVER';
+export type UserRole = 'SYSADMIN' | 'OWNER' | 'SELLER' | 'DRIVER';
 
 const STORAGE_KEYS = {
   ACTIVE_COMPANY: 'ats_active_company',
@@ -53,9 +53,27 @@ export class CompanyContextService {
 
   // Computed signals de roles
   readonly currentRole = computed<UserRole>(() => this.activeRole());
-  readonly isOwner = computed<boolean>(() => this.activeRole() === 'OWNER');
+  readonly isSysAdmin = computed<boolean>(() => this.activeRole() === 'SYSADMIN');
+  readonly isOwner = computed<boolean>(() => this.activeRole() === 'OWNER' || this.activeRole() === 'SYSADMIN');
   readonly isSeller = computed<boolean>(() => this.activeRole() === 'SELLER');
   readonly isDriver = computed<boolean>(() => this.activeRole() === 'DRIVER');
+
+  // Determina si el usuario tiene asignado el rol SYSADMIN en alguna compañía o contexto
+  readonly hasSysAdminRole = computed<boolean>(() => {
+    return (
+      this.isSysAdmin() ||
+      this.userRoles().some((r) => {
+        const name = (r.rol_name || (r as any).rol?.rol_name || '').toLowerCase();
+        return (
+          name.includes('sysadmin') ||
+          name === 'sysadmin' ||
+          name.includes('superadmin') ||
+          name.includes('root') ||
+          name.includes('administrador de sistema')
+        );
+      })
+    );
+  });
 
   // Etiqueta legible del rol real obtenido de la base de datos
   readonly roleLabel = computed<string>(() => {
@@ -65,6 +83,7 @@ export class CompanyContextService {
       if (rawName) return rawName;
     }
     const defaultLabels: Record<UserRole, string> = {
+      SYSADMIN: 'Administrador de Sistema (Sysadmin)',
       OWNER: 'Dueño / Admin',
       SELLER: 'Vendedor (Calle)',
       DRIVER: 'Repartidor (Camioneta)'
@@ -230,6 +249,15 @@ export class CompanyContextService {
   private _mapToUserRole(rolName?: string): UserRole {
     if (!rolName) return 'OWNER';
     const lower = rolName.toLowerCase();
+    if (
+      lower.includes('sysadmin') ||
+      lower === 'sysadmin' ||
+      lower.includes('superadmin') ||
+      lower.includes('root') ||
+      lower.includes('administrador de sistema')
+    ) {
+      return 'SYSADMIN';
+    }
     if (lower.includes('vendedor') || lower.includes('seller') || lower.includes('preventa') || lower.includes('comercial')) {
       return 'SELLER';
     }
