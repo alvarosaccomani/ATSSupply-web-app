@@ -50,8 +50,7 @@
   <div class="card border-0 shadow-sm rounded-3 mb-4">
     <div class="card-body p-3">
       <div class="row g-3 align-items-center">
-        <!-- Búsqueda -->
-        <div class="col-12 col-md-5">
+        <div class="col-12 col-md-4">
           <div class="input-group input-group-sm">
             <span class="input-group-text bg-light border-end-0">
               <i class="bi bi-search text-muted"></i>
@@ -88,13 +87,24 @@
           </div>
         </div>
 
-        <!-- Botón Nuevo Parámetro -->
-        <div class="col-12 col-md-3 text-md-end">
+        <!-- Botones de Acción -->
+        <div class="col-12 col-md-4 text-md-end d-flex justify-content-md-end gap-2">
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1 shadow-sm"
+            (click)="initializeDefaultSettings()"
+            [disabled]="!selectedCompanyUuid() || isSaving()"
+            title="Sembrar parámetros estándar faltantes"
+          >
+            <i class="bi bi-magic"></i>
+            <span>Parámetros por Defecto</span>
+          </button>
+
           <button
             type="button"
             class="btn btn-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm px-3"
             (click)="openCreateModal()"
-            [disabled]="!selectedCompanyUuid()"
+            [disabled]="!selectedCompanyUuid() || isSaving()"
           >
             <i class="bi bi-plus-lg"></i>
             <span>Nuevo Parámetro</span>
@@ -123,14 +133,24 @@
         <p class="text-muted small mb-3">
           No hay configuraciones registradas para el filtro seleccionado en esta empresa.
         </p>
-        <button
-          type="button"
-          class="btn btn-outline-primary btn-sm"
-          (click)="openCreateModal()"
-          [disabled]="!selectedCompanyUuid()"
-        >
-          <i class="bi bi-plus-lg me-1"></i>Crear Primer Parámetro
-        </button>
+        <div class="d-flex justify-content-center gap-2">
+          <button
+            type="button"
+            class="btn btn-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm px-3"
+            (click)="initializeDefaultSettings()"
+            [disabled]="!selectedCompanyUuid() || isSaving()"
+          >
+            <i class="bi bi-magic me-1"></i>Inicializar Parámetros por Defecto
+          </button>
+          <button
+            type="button"
+            class="btn btn-outline-primary btn-sm"
+            (click)="openCreateModal()"
+            [disabled]="!selectedCompanyUuid()"
+          >
+            <i class="bi bi-plus-lg me-1"></i>Crear Manualmente
+          </button>
+        </div>
       </div>
     </div>
   } @else {
@@ -184,12 +204,15 @@
                         class="badge rounded-pill fw-semibold"
                         [ngClass]="{
                           'bg-info-subtle text-info border border-info-subtle': item.cmps_datatype === 'string',
-                          'bg-success-subtle text-success border border-success-subtle': item.cmps_datatype === 'number',
+                          'bg-success-subtle text-success border border-success-subtle': item.cmps_datatype === 'integer' || item.cmps_datatype === 'float' || item.cmps_datatype === 'number',
                           'bg-warning-subtle text-warning border border-warning-subtle': item.cmps_datatype === 'boolean',
-                          'bg-purple-subtle text-purple border border-purple-subtle': item.cmps_datatype === 'json'
+                          'bg-purple-subtle text-purple border border-purple-subtle': item.cmps_datatype === 'json',
+                          'bg-primary-subtle text-primary border border-primary-subtle': item.cmps_datatype === 'date' || item.cmps_datatype === 'datetime',
+                          'bg-secondary-subtle text-secondary border border-secondary-subtle': item.cmps_datatype === 'array'
                         }"
+                        [title]="'dtp_uuid: ' + (item.dtp_uuid || 'N/A')"
                       >
-                        {{ item.cmps_datatype || 'string' }}
+                        {{ getTypeLabel(item) }}
                       </span>
                     </td>
 
@@ -317,13 +340,15 @@
                 <label class="form-label small fw-semibold text-muted">Tipo de Dato *</label>
                 <select
                   class="form-select form-select-sm"
-                  [(ngModel)]="formData().cmps_datatype"
-                  name="cmps_datatype"
+                  [ngModel]="formData().dtp_uuid"
+                  (ngModelChange)="onDataTypeChange($event)"
+                  name="dtp_uuid"
                 >
-                  @for (t of dataTypes; track t) {
-                    <option [value]="t">{{ t | uppercase }}</option>
+                  @for (t of dataTypesList; track t.dtp_uuid) {
+                    <option [value]="t.dtp_uuid">{{ t.name }} ({{ t.code }})</option>
                   }
                 </select>
+                <small class="text-muted font-monospace" style="font-size: 0.68rem;">UUID: {{ formData().dtp_uuid }}</small>
               </div>
 
               <!-- Valor del Parámetro -->
@@ -338,19 +363,55 @@
                     <option value="true">TRUE (Habilitado / Sí)</option>
                     <option value="false">FALSE (Deshabilitado / No)</option>
                   </select>
-                } @else if (formData().cmps_datatype === 'json') {
+                } @else if (getOptionsList(formData().cmps_options).length > 0) {
+                  <select
+                    class="form-select form-select-sm"
+                    [(ngModel)]="formData().cmps_value"
+                    name="cmps_value"
+                  >
+                    @for (opt of getOptionsList(formData().cmps_options); track opt) {
+                      <option [value]="opt">{{ opt }}</option>
+                    }
+                  </select>
+                } @else if (formData().cmps_datatype === 'json' || formData().cmps_datatype === 'array') {
                   <textarea
                     class="form-control form-control-sm font-monospace"
                     rows="4"
-                    placeholder='{"key": "value"}'
+                    placeholder="JSON o Lista estructurada..."
                     [(ngModel)]="formData().cmps_value"
                     name="cmps_value"
                   ></textarea>
+                } @else if (formData().cmps_datatype === 'date') {
+                  <input
+                    type="date"
+                    class="form-control form-control-sm"
+                    [(ngModel)]="formData().cmps_value"
+                    name="cmps_value"
+                    required
+                  />
+                } @else if (formData().cmps_datatype === 'datetime') {
+                  <input
+                    type="datetime-local"
+                    class="form-control form-control-sm"
+                    [(ngModel)]="formData().cmps_value"
+                    name="cmps_value"
+                    required
+                  />
+                } @else if (formData().cmps_datatype === 'integer' || formData().cmps_datatype === 'float' || formData().cmps_datatype === 'number') {
+                  <input
+                    type="number"
+                    [step]="formData().cmps_datatype === 'float' ? '0.01' : '1'"
+                    class="form-control form-control-sm"
+                    placeholder="0"
+                    [(ngModel)]="formData().cmps_value"
+                    name="cmps_value"
+                    required
+                  />
                 } @else {
                   <input
-                    [type]="formData().cmps_datatype === 'number' ? 'number' : 'text'"
+                    type="text"
                     class="form-control form-control-sm"
-                    placeholder="Valor a configurar..."
+                    placeholder="Ingrese el valor de configuración..."
                     [(ngModel)]="formData().cmps_value"
                     name="cmps_value"
                     required

@@ -1,10 +1,13 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { forkJoin, of } from 'rxjs';
 import { CompaniesService } from '@services/companies';
 import { CompanySettingsService } from '@services/company-settings';
 import { CompanyInterface } from '@interfaces/company';
 import { CompanySettingInterface } from '@interfaces/company-setting';
+import { DEFAULT_COMPANY_SETTINGS } from './default-company-settings';
+import { DATA_TYPES, DataTypeDefinition, getDataTypeByUuid, getDataTypeByCode } from './data-types.constants';
 
 @Component({
   selector: 'app-company-settings',
@@ -39,6 +42,7 @@ export class CompanySettings implements OnInit {
     cmps_description: string;
     cmps_value: string;
     cmps_datatype: string;
+    dtp_uuid: string;
     cmps_options: string;
     cmps_group: string;
   }>({
@@ -47,6 +51,7 @@ export class CompanySettings implements OnInit {
     cmps_description: '',
     cmps_value: '',
     cmps_datatype: 'string',
+    dtp_uuid: '680fd25d-d138-408a-8929-693893c0e722',
     cmps_options: '',
     cmps_group: 'GENERAL',
   });
@@ -55,9 +60,9 @@ export class CompanySettings implements OnInit {
   isDeleteModalOpen = signal<boolean>(false);
   settingToDelete = signal<CompanySettingInterface | null>(null);
 
-  // Lista de grupos conocidos / sugeridos
+  // Lista de grupos conocidos / sugeridos y tipos de datos
   predefinedGroups = ['GENERAL', 'FACTURACION', 'OPERACIONES', 'IMPRESION', 'NOTIFICACIONES', 'SEGURIDAD'];
-  dataTypes = ['string', 'number', 'boolean', 'json'];
+  dataTypesList = DATA_TYPES;
 
   // Grupos computados disponibles a partir de los settings
   availableGroups = computed(() => {
@@ -167,6 +172,7 @@ export class CompanySettings implements OnInit {
       cmps_description: '',
       cmps_value: '',
       cmps_datatype: 'string',
+      dtp_uuid: '680fd25d-d138-408a-8929-693893c0e722',
       cmps_options: '',
       cmps_group: 'GENERAL',
     });
@@ -175,17 +181,61 @@ export class CompanySettings implements OnInit {
 
   openEditModal(setting: CompanySettingInterface): void {
     this.isEditing.set(true);
+    // Resolver dtp_uuid si no viene explícito
+    let resolvedDtpUuid = setting.dtp_uuid;
+    if (!resolvedDtpUuid) {
+      const byCode = getDataTypeByCode(setting.cmps_datatype);
+      resolvedDtpUuid = byCode?.dtp_uuid || '680fd25d-d138-408a-8929-693893c0e722';
+    }
+
+    const typeDef = getDataTypeByUuid(resolvedDtpUuid);
+
     this.formData.set({
       cmps_uuid: setting.cmps_uuid,
       cmps_key: setting.cmps_key,
       cmps_parameter: setting.cmps_parameter,
       cmps_description: setting.cmps_description || '',
       cmps_value: setting.cmps_value || '',
-      cmps_datatype: setting.cmps_datatype || 'string',
+      cmps_datatype: typeDef?.code || setting.cmps_datatype || 'string',
+      dtp_uuid: resolvedDtpUuid,
       cmps_options: setting.cmps_options || '',
       cmps_group: (setting.cmps_group || 'GENERAL').toUpperCase(),
     });
     this.isModalOpen.set(true);
+  }
+
+  onDataTypeChange(selectedDtpUuid: string): void {
+    const typeDef = getDataTypeByUuid(selectedDtpUuid);
+    const code = typeDef?.code || 'string';
+
+    this.formData.update((prev) => {
+      let nextValue = prev.cmps_value;
+      if (code === 'boolean' && nextValue !== 'true' && nextValue !== 'false') {
+        nextValue = 'false';
+      }
+      return {
+        ...prev,
+        dtp_uuid: selectedDtpUuid,
+        cmps_datatype: code,
+        cmps_value: nextValue,
+      };
+    });
+  }
+
+  getTypeLabel(setting: CompanySettingInterface): string {
+    const byUuid = getDataTypeByUuid(setting.dtp_uuid);
+    if (byUuid) return byUuid.name;
+    const byCode = getDataTypeByCode(setting.cmps_datatype);
+    if (byCode) return byCode.name;
+    return setting.cmps_datatype || 'Cadena';
+  }
+
+  getOptionsList(options?: string | null): string[] {
+    if (!options || !options.trim()) return [];
+    return options
+      .split(',')
+      .map((o) => o.trim())
+      .filter((o) => o.length > 0);
   }
 
   closeModal(): void {
@@ -218,6 +268,7 @@ export class CompanySettings implements OnInit {
           cmps_description: form.cmps_description.trim() || null,
           cmps_value: form.cmps_value,
           cmps_datatype: form.cmps_datatype,
+          dtp_uuid: form.dtp_uuid,
           cmps_options: form.cmps_options.trim() || null,
           cmps_group: form.cmps_group.trim().toUpperCase() || 'GENERAL',
         })
@@ -242,6 +293,7 @@ export class CompanySettings implements OnInit {
           cmps_description: form.cmps_description.trim() || null,
           cmps_value: form.cmps_value,
           cmps_datatype: form.cmps_datatype,
+          dtp_uuid: form.dtp_uuid,
           cmps_options: form.cmps_options.trim() || null,
           cmps_group: form.cmps_group.trim().toUpperCase() || 'GENERAL',
         })
@@ -308,6 +360,45 @@ export class CompanySettings implements OnInit {
       },
       error: (err) => {
         this.errorMessage.set(err?.error?.message || 'Error al eliminar el parámetro.');
+        this.isSaving.set(false);
+      },
+    });
+  }
+
+  // Inicializar configuraciones estándar por defecto que no existan
+  initializeDefaultSettings(): void {
+    const cmpUuid = this.selectedCompanyUuid();
+    if (!cmpUuid) return;
+
+    const currentKeys = new Set(this.settings().map((s) => s.cmps_key.toUpperCase()));
+    const missing = DEFAULT_COMPANY_SETTINGS.filter(
+      (tpl) => !currentKeys.has(tpl.cmps_key.toUpperCase())
+    );
+
+    if (missing.length === 0) {
+      this.successMessage.set('La empresa ya cuenta con todos los parámetros estándar por defecto.');
+      return;
+    }
+
+    this.isSaving.set(true);
+    this.errorMessage.set(null);
+    this.successMessage.set(null);
+
+    const requests = missing.map((tpl) =>
+      this.companySettingsService.saveCompanySetting({
+        cmp_uuid: cmpUuid,
+        ...tpl,
+      })
+    );
+
+    forkJoin(requests).subscribe({
+      next: (results) => {
+        this.successMessage.set(`Se inicializaron ${results.length} configuraciones por defecto.`);
+        this.isSaving.set(false);
+        this.loadSettings();
+      },
+      error: (err) => {
+        this.errorMessage.set(err?.error?.message || 'Error al inicializar configuraciones por defecto.');
         this.isSaving.set(false);
       },
     });
