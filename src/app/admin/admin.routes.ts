@@ -1,8 +1,10 @@
 import { Routes } from '@angular/router';
+import { sysadminGuard } from '@guards/sysadmin.guard';
 
 export const ADMIN_ROUTES: Routes = [
   {
     path: 'application',
+    canActivate: [sysadminGuard],
     loadChildren: () => import('./application/application.routes').then(m => m.APPLICATION_ROUTES)
   },
   {
