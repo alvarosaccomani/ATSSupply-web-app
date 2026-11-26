@@ -6,6 +6,8 @@ import { CompanyContextService } from '@services/company-context';
 import { OfflineSyncService } from '@services/offline-sync';
 import { StockMovementsService } from '@services/stock-movements';
 import { CompanySettingsService } from '@services/company-settings';
+import { UserRolesCompanyService } from '@services/user-roles-company';
+import { AuthService } from '@services/auth';
 import { OrderInterface, OrderStatus } from '@interfaces/order';
 
 export type DeliveryStatus = 'PENDIENTE DE ENTREGA' | 'PAGADO' | 'ENTREGADO DEBE' | 'CUENTA CORRIENTE';
@@ -22,6 +24,8 @@ export interface DeliveryOrderItem {
   total: number;
   status: DeliveryStatus;
   hasCredit: boolean;
+  driverUuid?: string | null;
+  driverName?: string | null;
   items: { productId: string; qty: number }[];
 }
 
@@ -45,6 +49,8 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   private readonly _offlineSync = inject(OfflineSyncService);
   private readonly _stockMovementsService = inject(StockMovementsService);
   private readonly _companySettingsService = inject(CompanySettingsService);
+  private readonly _userRolesCompanyService = inject(UserRolesCompanyService);
+  private readonly _authService = inject(AuthService);
 
   // Estados de carga y feedback
   readonly isLoading = signal<boolean>(false);
@@ -62,6 +68,12 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   // Pedidos asignados a la hoja de ruta
   readonly orders = signal<DeliveryOrderItem[]>([]);
 
+  // Choferes registrados para el reparto
+  readonly drivers = signal<{ id: string; name: string }[]>([]);
+
+  // Chofer seleccionado en el filtro ('ALL' | 'UNASSIGNED' | uuid)
+  readonly selectedDriverId = signal<string | null>(null);
+
   // Modo de descuento de stock de la empresa ('ON_DELIVERY' | 'ON_TRUCK_LOAD')
   readonly stockDeductionMode = signal<'ON_DELIVERY' | 'ON_TRUCK_LOAD'>('ON_DELIVERY');
 
@@ -71,13 +83,57 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   // Modal para liquidar regreso
   readonly isReconcileModalOpen = signal<boolean>(false);
 
+  // Roles del usuario activo
+  readonly isDriver = computed<boolean>(() => this._companyContext.isDriver());
+  readonly isOwner = computed<boolean>(() => this._companyContext.isOwner());
+
+  // Nombre del chofer logueado
+  readonly currentDriverName = computed<string>(() => {
+    const user = this._authService.currentUser();
+    if (!user) return 'Chofer';
+    return `${user.usr_name} ${user.usr_surname || ''}`.trim();
+  });
+
+  // Pedidos visibles según el chofer seleccionado
+  readonly visibleOrders = computed<DeliveryOrderItem[]>(() => {
+    const list = this.orders();
+    const selDriver = this.selectedDriverId();
+    const totalDrivers = this.drivers().length;
+
+    // Si el usuario logueado es un chofer, solo ve sus pedidos asignados
+    if (this.isDriver()) {
+      const myId = this._authService.currentUser()?.usr_uuid;
+      if (!myId) return list;
+      return list.filter((o) => o.driverUuid === myId);
+    }
+
+    // Administrador / Dueño: Si no hay selección o es 'ALL'
+    if (!selDriver || selDriver === 'ALL') {
+      return list;
+    }
+
+    // Pedidos sin chofer asignado
+    if (selDriver === 'UNASSIGNED') {
+      return list.filter((o) => !o.driverUuid);
+    }
+
+    // Si la empresa tiene exactamente 1 chofer cargado y está autoseleccionado:
+    // mostramos los asignados a él más los pedidos no asignados aún
+    if (totalDrivers === 1 && selDriver === this.drivers()[0]?.id) {
+      return list.filter((o) => o.driverUuid === selDriver || !o.driverUuid);
+    }
+
+    // Si hay múltiples choferes: filtrar estrictamente por el chofer elegido
+    return list.filter((o) => o.driverUuid === selDriver);
+  });
+
   // Computed Signals
   readonly pendingDeliveries = computed<DeliveryOrderItem[]>(() =>
-    this.orders().filter((o) => o.status === 'PENDIENTE DE ENTREGA')
+    this.visibleOrders().filter((o) => o.status === 'PENDIENTE DE ENTREGA')
   );
 
   readonly completedDeliveries = computed<DeliveryOrderItem[]>(() =>
-    this.orders().filter((o) => o.status !== 'PENDIENTE DE ENTREGA')
+    this.visibleOrders().filter((o) => o.status !== 'PENDIENTE DE ENTREGA')
   );
 
   readonly truckLoadSummary = computed<TruckLoadItem[]>(() => {
@@ -111,7 +167,7 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   );
 
   readonly totalCollectedAmount = computed<number>(() =>
-    this.orders()
+    this.visibleOrders()
       .filter((o) => o.status === 'PAGADO')
       .reduce((acc, o) => acc + o.total, 0)
   );
@@ -123,6 +179,7 @@ export class DeliveryComponent implements OnInit, OnDestroy {
       if (comp?.cmp_uuid) {
         this.loadDeliveryData();
         this.loadStockDeductionMode(comp.cmp_uuid);
+        this.loadDrivers(comp.cmp_uuid);
       }
     });
   }
@@ -130,11 +187,8 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   public ngOnInit(): void {
     const cmpUuid = this._companyContext.activeCompany()?.cmp_uuid;
     if (cmpUuid) {
-      const local = localStorage.getItem(`ats_truck_dispatched_${cmpUuid}`);
-      if (local === 'true') {
-        this.isTruckDispatched.set(true);
-      }
       this.loadStockDeductionMode(cmpUuid);
+      this.loadDrivers(cmpUuid);
     }
     this.loadDeliveryData();
   }
@@ -197,26 +251,6 @@ export class DeliveryComponent implements OnInit, OnDestroy {
     this.isLoading.set(true);
     this.errorMessage.set(null);
 
-    // Consultar estado de despacho persistido en backend
-    this._stockMovementsService.getDispatchStatus(cmp_uuid).subscribe({
-      next: (res) => {
-        if (res?.success && res.data) {
-          this.isTruckDispatched.set(res.data.isDispatched);
-          if (res.data.isDispatched) {
-            localStorage.setItem(`ats_truck_dispatched_${cmp_uuid}`, 'true');
-          } else {
-            localStorage.removeItem(`ats_truck_dispatched_${cmp_uuid}`);
-          }
-        }
-      },
-      error: () => {
-        const local = localStorage.getItem(`ats_truck_dispatched_${cmp_uuid}`);
-        if (local === 'true') {
-          this.isTruckDispatched.set(true);
-        }
-      }
-    });
-
     // Cargar Catálogo de Productos
     this._productService.getProducts(cmp_uuid).subscribe({
       next: (res) => {
@@ -245,6 +279,11 @@ export class DeliveryComponent implements OnInit, OnDestroy {
               return `${d.ordd_quantity}x ${prodName}`;
             });
 
+            const driverUser = (ord as any).driver;
+            const driverName = driverUser
+              ? `${driverUser.usr_name} ${driverUser.usr_surname || ''}`.trim()
+              : null;
+
             return {
               id: ord.ord_uuid,
               customerName: (ord as any).customer?.cus_name || 'Cliente sin nombre',
@@ -257,6 +296,8 @@ export class DeliveryComponent implements OnInit, OnDestroy {
               total: Number(ord.ord_totalamount) || 0,
               status: this._mapToDeliveryStatus(ord.ord_status as OrderStatus),
               hasCredit: Boolean((ord as any).customer?.cus_hascredit),
+              driverUuid: ord.usr_uuid_driver || null,
+              driverName,
               items: rawDetails.map((d: any) => ({
                 productId: d.prd_uuid,
                 qty: Number(d.ordd_quantity) || 0
@@ -265,12 +306,146 @@ export class DeliveryComponent implements OnInit, OnDestroy {
           });
 
           this.orders.set(mappedOrders);
+          this.loadDrivers(cmp_uuid);
         }
       },
       error: (err) => {
         this.isLoading.set(false);
         this.errorMessage.set('No se pudieron obtener los pedidos para el reparto.');
         console.warn('Error al consultar pedidos:', err);
+      }
+    });
+  }
+
+  /**
+   * Carga los choferes de la empresa y ejecuta la auto-selección inteligente.
+   */
+  public loadDrivers(cmp_uuid: string): void {
+    this._userRolesCompanyService.getUserRolesCompany(cmp_uuid).subscribe({
+      next: (res) => {
+        const driverMap = new Map<string, string>();
+
+        if (res?.data && Array.isArray(res.data)) {
+          res.data.forEach((urc: any) => {
+            const roleName = (urc.rol_name || urc.rol?.rol_name || '').toLowerCase();
+            const isDriverRole =
+              roleName.includes('chofer') ||
+              roleName.includes('repartidor') ||
+              roleName.includes('driver') ||
+              roleName.includes('logistica') ||
+              roleName.includes('entrega');
+
+            if (isDriverRole && urc.usr_uuid) {
+              const name = urc.usr
+                ? `${urc.usr.usr_name} ${urc.usr.usr_surname || ''}`.trim()
+                : urc.usr_name || 'Chofer';
+              driverMap.set(urc.usr_uuid, name);
+            }
+          });
+        }
+
+        // Agregar también choferes asignados en los pedidos cargados
+        this.orders().forEach((o) => {
+          if (o.driverUuid && !driverMap.has(o.driverUuid)) {
+            driverMap.set(o.driverUuid, o.driverName || 'Chofer');
+          }
+        });
+
+        const list = Array.from(driverMap.entries()).map(([id, name]) => ({ id, name }));
+        this.drivers.set(list);
+
+        // Auto-selección según rol y cantidad de choferes
+        if (this.isDriver()) {
+          const myId = this._authService.currentUser()?.usr_uuid || null;
+          this.selectedDriverId.set(myId);
+          this.checkDriverDispatchStatus(cmp_uuid, myId);
+        } else {
+          // Si es Dueño o Administrador
+          if (list.length === 1) {
+            // REGLA: Si tiene un solo chofer cargado, se autoselecciona el único chofer
+            this.selectedDriverId.set(list[0].id);
+            this.checkDriverDispatchStatus(cmp_uuid, list[0].id);
+          } else if (list.length > 1) {
+            const current = this.selectedDriverId();
+            const isValid =
+              current &&
+              (current === 'ALL' || current === 'UNASSIGNED' || list.some((d) => d.id === current));
+            if (!isValid) {
+              this.selectedDriverId.set(list[0].id);
+              this.checkDriverDispatchStatus(cmp_uuid, list[0].id);
+            } else {
+              this.checkDriverDispatchStatus(cmp_uuid, current);
+            }
+          } else {
+            this.selectedDriverId.set('ALL');
+            this.checkDriverDispatchStatus(cmp_uuid, undefined);
+          }
+        }
+      },
+      error: (err) => {
+        console.warn('Error al consultar choferes de la empresa:', err);
+        this.checkDriverDispatchStatus(cmp_uuid, undefined);
+      }
+    });
+  }
+
+  /**
+   * Consulta el estado de despacho de camión para un chofer específico o general.
+   */
+  public checkDriverDispatchStatus(cmp_uuid: string, driverId?: string | null): void {
+    const effectiveDriver =
+      driverId && driverId !== 'ALL' && driverId !== 'UNASSIGNED' ? driverId : undefined;
+
+    this._stockMovementsService.getDispatchStatus(cmp_uuid, effectiveDriver).subscribe({
+      next: (res) => {
+        if (res?.success && res.data) {
+          this.isTruckDispatched.set(res.data.isDispatched);
+          const key = `ats_truck_dispatched_${cmp_uuid}_${effectiveDriver || 'default'}`;
+          if (res.data.isDispatched) {
+            localStorage.setItem(key, 'true');
+          } else {
+            localStorage.removeItem(key);
+          }
+        }
+      },
+      error: () => {
+        const key = `ats_truck_dispatched_${cmp_uuid}_${effectiveDriver || 'default'}`;
+        const local = localStorage.getItem(key);
+        this.isTruckDispatched.set(local === 'true');
+      }
+    });
+  }
+
+  public onDriverSelectChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const value = select.value;
+    this.selectedDriverId.set(value);
+    const cmpUuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (cmpUuid) {
+      this.checkDriverDispatchStatus(cmpUuid, value);
+    }
+  }
+
+  public onOrderDriverChange(orderId: string, event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const driverId = select.value ? select.value : null;
+    this.assignDriverToOrder(orderId, driverId);
+  }
+
+  public assignDriverToOrder(orderId: string, driverId: string | null): void {
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (!cmp_uuid) return;
+
+    this._orderService.assignDriverToOrders(cmp_uuid, [orderId], driverId).subscribe({
+      next: () => {
+        const driverName = this.drivers().find((d) => d.id === driverId)?.name || null;
+        this.orders.update((list) =>
+          list.map((o) => (o.id === orderId ? { ...o, driverUuid: driverId, driverName } : o))
+        );
+        this._showSuccessFeedback('ONLINE', 'Chofer asignado al pedido con éxito.');
+      },
+      error: (err) => {
+        this.errorMessage.set(err?.error?.message || 'Error al asignar chofer al pedido.');
       }
     });
   }
@@ -284,13 +459,21 @@ export class DeliveryComponent implements OnInit, OnDestroy {
 
     if (!cmp_uuid || items.length === 0) return;
 
+    const selDriver = this.selectedDriverId();
+    const effectiveDriver =
+      selDriver && selDriver !== 'ALL' && selDriver !== 'UNASSIGNED' ? selDriver : undefined;
+
     this.isActionProcessing.set(true);
-    this._stockMovementsService.dispatchTruckLoad(cmp_uuid, items).subscribe({
+    this._stockMovementsService.dispatchTruckLoad(cmp_uuid, items, undefined, effectiveDriver).subscribe({
       next: () => {
         this.isActionProcessing.set(false);
         this.isTruckDispatched.set(true);
-        localStorage.setItem(`ats_truck_dispatched_${cmp_uuid}`, 'true');
-        this._showSuccessFeedback('ONLINE', '¡Camioneta despachada! El stock de estiba ha sido descontado de la cámara.');
+        const key = `ats_truck_dispatched_${cmp_uuid}_${effectiveDriver || 'default'}`;
+        localStorage.setItem(key, 'true');
+        this._showSuccessFeedback(
+          'ONLINE',
+          '¡Camioneta despachada! El stock de estiba ha sido descontado de la cámara.'
+        );
       },
       error: (err) => {
         this.isActionProcessing.set(false);
@@ -318,16 +501,22 @@ export class DeliveryComponent implements OnInit, OnDestroy {
 
     if (!cmp_uuid) return;
 
+    const selDriver = this.selectedDriverId();
+    const effectiveDriver =
+      selDriver && selDriver !== 'ALL' && selDriver !== 'UNASSIGNED' ? selDriver : undefined;
+
     this.isActionProcessing.set(true);
-    this._stockMovementsService.reconcileTruckReturn(cmp_uuid, items).subscribe({
+    this._stockMovementsService.reconcileTruckReturn(cmp_uuid, items, undefined, effectiveDriver).subscribe({
       next: () => {
         this.isActionProcessing.set(false);
         this.isTruckDispatched.set(false);
-        localStorage.removeItem(`ats_truck_dispatched_${cmp_uuid}`);
+        const key = `ats_truck_dispatched_${cmp_uuid}_${effectiveDriver || 'default'}`;
+        localStorage.removeItem(key);
         this.closeReconcileModal();
-        const msg = items.length > 0
-          ? '¡Reparto liquidado! El sobrante devuelto ha sido reingresado a la cámara.'
-          : '¡Reparto finalizado con éxito! 100% de los pedidos entregados.';
+        const msg =
+          items.length > 0
+            ? '¡Reparto liquidado! El sobrante devuelto ha sido reingresado a la cámara.'
+            : '¡Reparto finalizado con éxito! 100% de los pedidos entregados.';
         this._showSuccessFeedback('ONLINE', msg);
         this.loadDeliveryData();
       },
