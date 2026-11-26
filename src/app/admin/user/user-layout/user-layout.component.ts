@@ -77,6 +77,7 @@ export class UserLayoutComponent {
   );
   readonly showStockMovements = computed<boolean>(() => this.role() === 'OWNER');
   readonly showTeam = computed<boolean>(() => this.role() === 'OWNER');
+  readonly showApplicationConfig = computed<boolean>(() => this.companyContext.hasSysAdminRole());
 
   // Menús cargados del backend
   private rawMenuTree = signal<MenuItemTree[]>([]);
