@@ -18,6 +18,7 @@ export interface OrderInterface {
   ord_deliverydate?: Date | string | null;
   ord_status: OrderStatus | string;
   ord_totalamount: number;
+  ord_paidamount?: number;
   ord_notes?: string | null;
   ord_createdat?: Date | string;
   ord_updatedat?: Date | string;
