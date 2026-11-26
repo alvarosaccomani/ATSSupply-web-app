@@ -75,4 +75,36 @@ export class StockMovementsService {
       { headers }
     );
   }
+
+  /**
+   * Despacha la carga de la camioneta descontando de cámara el consolidado de estiba.
+   */
+  public dispatchTruckLoad(
+    cmp_uuid: string,
+    items: { prd_uuid: string; quantity: number }[],
+    notes?: string
+  ): Observable<any> {
+    const headers = new HttpHeaders().set('content-type', 'application/json');
+    return this._http.post<any>(
+      `${environment.apiUrl}delivery/dispatch-load`,
+      { cmp_uuid, items, notes },
+      { headers }
+    );
+  }
+
+  /**
+   * Reingresa a la cámara el sobrante no entregado al regreso del vehículo.
+   */
+  public reconcileTruckReturn(
+    cmp_uuid: string,
+    items: { prd_uuid: string; quantity: number }[],
+    notes?: string
+  ): Observable<any> {
+    const headers = new HttpHeaders().set('content-type', 'application/json');
+    return this._http.post<any>(
+      `${environment.apiUrl}delivery/reconcile-return`,
+      { cmp_uuid, items, notes },
+      { headers }
+    );
+  }
 }
