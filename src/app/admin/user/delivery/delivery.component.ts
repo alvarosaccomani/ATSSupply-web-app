@@ -127,11 +127,15 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   }
 
   public ngOnInit(): void {
-    this.loadDeliveryData();
     const cmpUuid = this._companyContext.activeCompany()?.cmp_uuid;
     if (cmpUuid) {
+      const local = localStorage.getItem(`ats_truck_dispatched_${cmpUuid}`);
+      if (local === 'true') {
+        this.isTruckDispatched.set(true);
+      }
       this.loadStockDeductionMode(cmpUuid);
     }
+    this.loadDeliveryData();
   }
 
   public ngOnDestroy(): void {
@@ -191,6 +195,26 @@ export class DeliveryComponent implements OnInit, OnDestroy {
 
     this.isLoading.set(true);
     this.errorMessage.set(null);
+
+    // Consultar estado de despacho persistido en backend
+    this._stockMovementsService.getDispatchStatus(cmp_uuid).subscribe({
+      next: (res) => {
+        if (res?.success && res.data) {
+          this.isTruckDispatched.set(res.data.isDispatched);
+          if (res.data.isDispatched) {
+            localStorage.setItem(`ats_truck_dispatched_${cmp_uuid}`, 'true');
+          } else {
+            localStorage.removeItem(`ats_truck_dispatched_${cmp_uuid}`);
+          }
+        }
+      },
+      error: () => {
+        const local = localStorage.getItem(`ats_truck_dispatched_${cmp_uuid}`);
+        if (local === 'true') {
+          this.isTruckDispatched.set(true);
+        }
+      }
+    });
 
     // Cargar Catálogo de Productos
     this._productService.getProducts(cmp_uuid).subscribe({
@@ -263,6 +287,7 @@ export class DeliveryComponent implements OnInit, OnDestroy {
       next: () => {
         this.isActionProcessing.set(false);
         this.isTruckDispatched.set(true);
+        localStorage.setItem(`ats_truck_dispatched_${cmp_uuid}`, 'true');
         this._showSuccessFeedback('ONLINE', '¡Camioneta despachada! El stock de estiba ha sido descontado de la cámara.');
       },
       error: (err) => {
@@ -291,25 +316,22 @@ export class DeliveryComponent implements OnInit, OnDestroy {
 
     if (!cmp_uuid) return;
 
-    if (items.length === 0) {
-      this.closeReconcileModal();
-      this.isTruckDispatched.set(false);
-      this._showSuccessFeedback('ONLINE', 'Reparto finalizado. No hubo sobrante para reingresar.');
-      return;
-    }
-
     this.isActionProcessing.set(true);
     this._stockMovementsService.reconcileTruckReturn(cmp_uuid, items).subscribe({
       next: () => {
         this.isActionProcessing.set(false);
         this.isTruckDispatched.set(false);
+        localStorage.removeItem(`ats_truck_dispatched_${cmp_uuid}`);
         this.closeReconcileModal();
-        this._showSuccessFeedback('ONLINE', '¡Reparto liquidado! El sobrante devuelto ha sido reingresado a la cámara.');
+        const msg = items.length > 0
+          ? '¡Reparto liquidado! El sobrante devuelto ha sido reingresado a la cámara.'
+          : '¡Reparto finalizado con éxito! 100% de los pedidos entregados.';
+        this._showSuccessFeedback('ONLINE', msg);
         this.loadDeliveryData();
       },
       error: (err) => {
         this.isActionProcessing.set(false);
-        this.errorMessage.set(err?.error?.message || 'Error al reingresar sobrante a la cámara.');
+        this.errorMessage.set(err?.error?.message || 'Error al cerrar el reparto.');
       }
     });
   }
