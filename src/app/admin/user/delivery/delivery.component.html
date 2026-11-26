@@ -20,6 +20,53 @@
         Total consolidado de bolsas a estibar en el vehículo según paradas pendientes.
       </p>
 
+      <!-- Panel / Selector de Chofer -->
+      @if (isDriver()) {
+        <div class="d-flex align-items-center gap-2 mb-3 p-2 bg-primary-subtle text-primary rounded-3 border border-primary-subtle">
+          <i class="bi bi-person-badge-fill fs-5"></i>
+          <div class="small">
+            <span class="d-block text-muted" style="font-size: 0.72rem;">VEHÍCULO ASIGNADO A:</span>
+            <strong class="fs-6">{{ currentDriverName() }}</strong>
+          </div>
+        </div>
+      } @else {
+        <!-- Administrador o Dueño -->
+        @if (drivers().length === 1) {
+          <!-- Exactamente 1 chofer en la empresa: Autoseleccionado por defecto -->
+          <div class="d-flex align-items-center gap-2 mb-3 p-2 bg-light rounded-3 border">
+            <i class="bi bi-person-check-fill text-primary fs-5"></i>
+            <div class="small flex-grow-1">
+              <span class="text-muted d-block" style="font-size: 0.7rem;">CHOFER ACTIVO (ÚNICO):</span>
+              <strong class="text-dark fs-6">{{ drivers()[0].name }}</strong>
+            </div>
+            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">
+              Auto
+            </span>
+          </div>
+        } @else if (drivers().length > 1) {
+          <!-- Múltiples choferes: Selector para alternar entre camiones/rutas -->
+          <div class="mb-3">
+            <label class="form-label small fw-bold text-muted mb-1 d-flex justify-content-between align-items-center">
+              <span><i class="bi bi-truck me-1"></i>SELECCIONAR CHOFER / RUTA:</span>
+              <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">
+                {{ drivers().length }} choferes
+              </span>
+            </label>
+            <select
+              class="form-select form-select-sm fw-semibold shadow-sm"
+              [value]="selectedDriverId() || 'ALL'"
+              (change)="onDriverSelectChange($event)"
+            >
+              <option value="ALL">📦 Todos los choferes y pedidos</option>
+              @for (driver of drivers(); track driver.id) {
+                <option [value]="driver.id">🚚 Chofer: {{ driver.name }}</option>
+              }
+              <option value="UNASSIGNED">⏳ Pedidos sin chofer asignado</option>
+            </select>
+          </div>
+        }
+      }
+
       @if (isLoading()) {
         <div class="text-center py-4 text-muted small">
           <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
@@ -172,12 +219,44 @@
           </div>
 
           <!-- Resumen de Ítems del Pedido -->
-          <div class="p-2 bg-light rounded-3 mb-3 small">
+          <div class="p-2 bg-light rounded-3 mb-2 small">
             <span class="text-muted">Detalle: </span>
             <strong class="text-dark">{{ order.detailSummary }}</strong>
             @if (order.notes) {
               <div class="text-muted mt-1 fst-italic">
                 <i class="bi bi-info-circle me-1"></i>{{ order.notes }}
+              </div>
+            }
+          </div>
+
+          <!-- Chofer Asignado y Control de Asignación (Visible para Admin/Dueño) -->
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div>
+              @if (order.driverName) {
+                <span class="badge bg-light text-dark border small fw-semibold">
+                  <i class="bi bi-person-fill text-primary me-1"></i>Chofer: {{ order.driverName }}
+                </span>
+              } @else {
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle small fw-semibold">
+                  <i class="bi bi-exclamation-circle me-1"></i>Sin chofer asignado
+                </span>
+              }
+            </div>
+
+            @if (!isDriver() && drivers().length > 0) {
+              <div class="d-inline-flex align-items-center gap-1">
+                <span class="text-muted" style="font-size: 0.72rem;">Asignar a:</span>
+                <select
+                  class="form-select form-select-sm py-0 px-2 fw-semibold border-secondary-subtle"
+                  style="font-size: 0.75rem; width: auto; height: 26px;"
+                  [value]="order.driverUuid || ''"
+                  (change)="onOrderDriverChange(order.id, $event)"
+                >
+                  <option value="">Sin chofer</option>
+                  @for (d of drivers(); track d.id) {
+                    <option [value]="d.id">{{ d.name }}</option>
+                  }
+                </select>
               </div>
             }
           </div>
