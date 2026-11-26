@@ -2,9 +2,20 @@
   <!-- Columna Izquierda: Carga Consolidada de Camioneta (Sticky en PC) -->
   <div class="col-12 col-lg-4">
     <div class="ats-card p-3 p-lg-4 border-info position-sticky" style="top: 60px;">
-      <h6 class="fw-bold text-primary mb-1">
-        <i class="bi bi-truck me-2"></i>CARGA DE CAMIONETA
-      </h6>
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <h6 class="fw-bold text-primary mb-0">
+          <i class="bi bi-truck me-2"></i>CARGA DE CAMIONETA
+        </h6>
+        @if (stockDeductionMode() === 'ON_TRUCK_LOAD') {
+          <span class="badge bg-warning text-dark border fw-bold" style="font-size: 0.65rem;">
+            MODO: DESPACHO
+          </span>
+        } @else {
+          <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">
+            MODO: ENTREGA
+          </span>
+        }
+      </div>
       <p class="text-muted small mb-3">
         Total consolidado de bolsas a estibar en el vehículo según paradas pendientes.
       </p>
@@ -32,7 +43,7 @@
         </div>
 
         <!-- Resumen de Métricas de Ruta -->
-        <div class="p-3 bg-light rounded-3 small">
+        <div class="p-3 bg-light rounded-3 small mb-3">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="text-muted">Total de bultos:</span>
             <span class="fw-bold fs-6 text-dark">{{ totalTruckBags() }} bolsas</span>
@@ -46,6 +57,43 @@
             <span class="fw-bold text-success">{{ formatMoney(totalCollectedAmount()) }}</span>
           </div>
         </div>
+
+        <!-- ACCIONES DE DESPACHO / LIQUIDACIÓN (SI APLICA ON_TRUCK_LOAD) -->
+        @if (stockDeductionMode() === 'ON_TRUCK_LOAD') {
+          <div class="d-grid gap-2 border-top pt-3">
+            @if (!isTruckDispatched()) {
+              <button
+                type="button"
+                class="btn btn-primary d-flex align-items-center justify-content-center gap-2 shadow-sm py-2"
+                [disabled]="totalTruckBags() === 0 || isActionProcessing()"
+                (click)="dispatchTruck()"
+              >
+                @if (isActionProcessing()) {
+                  <span class="spinner-border spinner-border-sm" role="status"></span>
+                  <span>Despachando...</span>
+                } @else {
+                  <i class="bi bi-box-arrow-up-right fs-5"></i>
+                  <span class="fw-bold">Despachar Camioneta (Descontar Stock)</span>
+                }
+              </button>
+            } @else {
+              <div class="p-2 rounded-3 bg-success-subtle text-success border border-success-subtle small text-center mb-1">
+                <i class="bi bi-check-circle-fill me-1"></i><strong>Camioneta Despachada</strong>
+                <div style="font-size: 0.72rem;">El stock fue descontado de la cámara.</div>
+              </div>
+
+              <button
+                type="button"
+                class="btn btn-warning text-dark fw-bold d-flex align-items-center justify-content-center gap-2 shadow-sm py-2"
+                [disabled]="isActionProcessing()"
+                (click)="openReconcileModal()"
+              >
+                <i class="bi bi-arrow-return-left fs-5"></i>
+                <span>Cerrar Reparto y Reingresar Sobrante</span>
+              </button>
+            }
+          </div>
+        }
       }
     </div>
   </div>
@@ -68,155 +116,197 @@
         <div class="d-flex align-items-center gap-2">
           <i
             class="bi fs-5"
-            [ngClass]="success.type === 'OFFLINE' ? 'bi-cloud-slash-fill text-warning' : 'bi-check-circle-fill text-success'"
+            [ngClass]="success.type === 'OFFLINE' ? 'bi-cloud-slash' : 'bi-check-circle-fill'"
           ></i>
-          <div>
-            <div class="fw-bold">{{ success.type === 'OFFLINE' ? 'Entrega Registrada Offline' : 'Entrega Confirmada' }}</div>
-            <div>{{ success.text }}</div>
-          </div>
+          <span>{{ success.text }}</span>
         </div>
         <button
           type="button"
-          class="btn-close btn-close-sm p-1"
-          aria-label="Cerrar"
-          title="Cerrar mensaje"
+          class="btn-close btn-close-sm"
           (click)="dismissSuccessMessage()"
+          aria-label="Cerrar"
         ></button>
       </div>
     }
 
     @if (errorMessage()) {
-      <div class="alert alert-warning py-2 small mb-3">
-        <i class="bi bi-exclamation-triangle-fill me-1"></i>
-        {{ errorMessage() }}
+      <div class="alert alert-danger py-2 small mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+        <span>{{ errorMessage() }}</span>
       </div>
     }
 
-    @if (isLoading()) {
-      <div class="text-center py-5">
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Cargando...</span>
-        </div>
-        <div class="text-muted small mt-2">Cargando pedidos de la hoja de ruta...</div>
-      </div>
-    } @else {
-      <div class="row g-3">
-        @for (order of pendingDeliveries(); track order.id) {
-          <div class="col-12 col-md-6">
-            <div class="ats-card p-3 h-100 d-flex flex-column justify-content-between border-start border-4 border-warning">
-              <div>
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                  <span class="fw-bold text-dark">{{ order.customerName }}</span>
-                  <span class="fw-bold text-primary fs-6">{{ formatMoney(order.total) }}</span>
-                </div>
-
-                <!-- Dirección y acceso a GPS -->
-                <div class="small text-muted mb-2 d-flex align-items-center justify-content-between">
-                  <span>
-                    <i class="bi bi-geo-alt-fill text-danger me-1"></i>{{ order.address }}
-                  </span>
-                  <button
-                    type="button"
-                    class="btn btn-link btn-sm p-0 text-decoration-none"
-                    [title]="order.lat && order.lng ? 'Navegar por GPS exacto' : 'Abrir en Google Maps'"
-                    (click)="openNavigationMap(order)"
-                  >
-                    <i class="bi bi-map-fill text-primary"></i> GPS
-                    @if (order.lat && order.lng) {
-                      <span class="badge bg-success text-white ms-1 small" style="font-size: 0.65rem;">GPS</span>
-                    }
-                  </button>
-                </div>
-
+    <div class="d-flex flex-column gap-3">
+      @for (order of pendingDeliveries(); track order.id) {
+        <div class="ats-card delivery-card p-3 p-lg-4">
+          <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2 mb-2">
+            <div>
+              <span class="fw-bold fs-5 text-dark">{{ order.customerName }}</span>
+              <div class="text-muted small mt-1">
+                <i class="bi bi-geo-alt-fill text-danger me-1"></i>{{ order.address }}
                 @if (order.phone) {
-                  <div class="small text-muted mb-2">
-                    <i class="bi bi-telephone-fill text-success me-1"></i>{{ order.phone }}
-                  </div>
-                }
-
-                <!-- Detalle de bolsas a bajar -->
-                <div class="p-2 bg-light rounded-2 small fw-semibold text-dark mb-2">
-                  <i class="bi bi-box-seam me-1 text-secondary"></i>{{ order.detailSummary }}
-                </div>
-
-                @if (order.notes) {
-                  <div class="alert alert-warning py-1 px-2 small mb-2" style="font-size: 0.75rem;">
-                    <i class="bi bi-info-circle me-1"></i>{{ order.notes }}
-                  </div>
+                  <span class="ms-2">
+                    <i class="bi bi-telephone-fill text-primary me-1"></i>
+                    <a [href]="'tel:' + order.phone" class="text-decoration-none text-muted">
+                      {{ order.phone }}
+                    </a>
+                  </span>
                 }
               </div>
+            </div>
 
-              <!-- Acciones de Cobro y Cierre en Calle -->
-              <div class="d-flex gap-2 mt-3 pt-2 border-top">
-                <button
-                  type="button"
-                  class="btn btn-sm btn-success flex-fill fw-semibold shadow-sm"
-                  title="Cobrado en efectivo o transferencia inmediata"
-                  (click)="markDeliveryStatus(order.id, 'PAGADO')"
-                >
-                  <i class="bi bi-cash me-1"></i>Pagado
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-danger flex-fill fw-semibold"
-                  title="Baja la mercadería pero queda debiendo"
-                  (click)="markDeliveryStatus(order.id, 'ENTREGADO DEBE')"
-                >
-                  <i class="bi bi-exclamation-circle me-1"></i>Debe
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-primary flex-fill fw-semibold"
-                  title="Imputar a Cuenta Corriente"
-                  (click)="markDeliveryStatus(order.id, 'CUENTA CORRIENTE')"
-                >
-                  <i class="bi bi-journal-check me-1"></i>Cta Cte
-                </button>
+            <!-- Importe Total a Cobrar -->
+            <div class="text-sm-end">
+              <span class="fw-bold fs-4 text-primary d-block">{{ formatMoney(order.total) }}</span>
+              <span class="badge bg-warning text-dark border" style="font-size: 0.7rem;">
+                {{ order.status }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Resumen de Ítems del Pedido -->
+          <div class="p-2 bg-light rounded-3 mb-3 small">
+            <span class="text-muted">Detalle: </span>
+            <strong class="text-dark">{{ order.detailSummary }}</strong>
+            @if (order.notes) {
+              <div class="text-muted mt-1 fst-italic">
+                <i class="bi bi-info-circle me-1"></i>{{ order.notes }}
               </div>
-            </div>
+            }
           </div>
-        } @empty {
-          <div class="col-12">
-            <div class="ats-card p-4 text-center text-muted">
-              <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>
-              <h6 class="fw-bold text-dark mb-1">¡Reparto finalizado!</h6>
-              <p class="mb-0 small">No quedan entregas pendientes en la hoja de ruta de la camioneta.</p>
-            </div>
-          </div>
-        }
-      </div>
 
-      <!-- Sección de Entregas Realizadas de la Jornada -->
-      @if (completedDeliveries().length > 0) {
-        <div class="mt-4 pt-3 border-top">
-          <h6 class="fw-bold text-muted small text-uppercase mb-3">
-            Entregas Completadas Hoy ({{ completedDeliveries().length }})
-          </h6>
-          <div class="d-flex flex-column gap-2">
-            @for (order of completedDeliveries(); track order.id) {
-              <div class="ats-card p-2 px-3 bg-light d-flex justify-content-between align-items-center">
+          <!-- Botones de Acción Rápida para el Chofer / Repartidor -->
+          <div class="d-flex flex-wrap gap-2 pt-2 border-top">
+            <button
+              type="button"
+              class="btn btn-success btn-sm flex-grow-1 d-flex align-items-center justify-content-center gap-1 shadow-sm py-2"
+              (click)="markDeliveryStatus(order.id, 'PAGADO')"
+            >
+              <i class="bi bi-check2-circle fs-5"></i>
+              <span class="fw-semibold">Cobrado / Pagado</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-warning btn-sm text-dark flex-grow-1 d-flex align-items-center justify-content-center gap-1 shadow-sm py-2"
+              (click)="markDeliveryStatus(order.id, 'ENTREGADO DEBE')"
+            >
+              <i class="bi bi-clock-history fs-5"></i>
+              <span class="fw-semibold">Entregado (Debe)</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-info btn-sm text-white flex-grow-1 d-flex align-items-center justify-content-center gap-1 shadow-sm py-2"
+              (click)="markDeliveryStatus(order.id, 'CUENTA CORRIENTE')"
+            >
+              <i class="bi bi-file-earmark-text fs-5"></i>
+              <span class="fw-semibold">Cta. Cte.</span>
+            </button>
+          </div>
+        </div>
+      } @empty {
+        <div class="ats-card p-5 text-center text-muted">
+          <i class="bi bi-check-all fs-1 text-success d-block mb-2"></i>
+          <h6 class="fw-bold text-dark">¡Hoja de ruta completada!</h6>
+          <p class="small mb-0">No quedan paradas pendientes en la jornada actual.</p>
+        </div>
+      }
+    </div>
+
+    <!-- Historial de Entregas Realizadas en el Día -->
+    @if (completedDeliveries().length > 0) {
+      <div class="mt-4">
+        <h6 class="fw-bold text-uppercase text-muted mb-3" style="font-size: 0.8rem;">
+          Entregas Completadas ({{ completedDeliveries().length }})
+        </h6>
+        <div class="d-flex flex-column gap-2">
+          @for (order of completedDeliveries(); track order.id) {
+            <div class="ats-card p-3 opacity-75">
+              <div class="d-flex justify-content-between align-items-center">
                 <div>
-                  <span class="fw-semibold small text-dark">{{ order.customerName }}</span>
-                  <span class="text-muted small ms-2">• {{ order.detailSummary }}</span>
+                  <span class="fw-semibold text-dark">{{ order.customerName }}</span>
+                  <small class="text-muted d-block">{{ order.detailSummary }}</small>
                 </div>
-                <div class="d-flex align-items-center gap-2">
-                  <span class="fw-bold small text-primary">{{ formatMoney(order.total) }}</span>
+                <div class="d-flex align-items-center gap-3">
+                  <span class="fw-bold text-dark">{{ formatMoney(order.total) }}</span>
                   <span
-                    class="badge"
-                    [ngClass]="{
-                      'bg-success': order.status === 'PAGADO',
-                      'bg-danger': order.status === 'ENTREGADO DEBE',
-                      'bg-primary': order.status === 'CUENTA CORRIENTE'
-                    }"
+                    class="badge rounded-pill fw-semibold px-2 py-1"
+                    style="font-size: 0.72rem;"
+                    [ngClass]="getStatusBadgeClass(order.status)"
                   >
                     {{ order.status }}
                   </span>
                 </div>
               </div>
-            }
-          </div>
+            </div>
+          }
         </div>
-      }
+      </div>
     }
   </div>
 </div>
+
+<!-- MODAL CERRAR REPARTO Y REINGRESAR SOBRANTE -->
+@if (isReconcileModalOpen()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom py-3">
+          <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2">
+            <i class="bi bi-arrow-return-left text-warning"></i>
+            Liquidación de Reparto y Reingreso a Cámara
+          </h5>
+          <button type="button" class="btn-close" (click)="closeReconcileModal()" [disabled]="isActionProcessing()"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <p class="text-muted small mb-3">
+            El sistema calculó el sobrante devuelto por la camioneta en base a las paradas no entregadas:
+          </p>
+
+          @if (returnedSurplusSummary().length === 0) {
+            <div class="alert alert-success small d-flex align-items-center gap-2 mb-0">
+              <i class="bi bi-check-circle-fill fs-5"></i>
+              <div>Se entregó el 100% de la carga despachada. No hay sobrante para reingresar.</div>
+            </div>
+          } @else {
+            <div class="list-group mb-3">
+              @for (item of returnedSurplusSummary(); track item.productId) {
+                <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                  <span class="fw-semibold text-dark small">{{ item.productName }}</span>
+                  <span class="badge bg-success fs-6">+{{ item.totalBags }} bolsas a reingresar</span>
+                </div>
+              }
+            </div>
+            <div class="alert alert-info py-2 small mb-0">
+              <i class="bi bi-info-circle me-1"></i>
+              Al confirmar, estas bolsas se sumarán automáticamente al stock disponible en la cámara principal.
+            </div>
+          }
+        </div>
+
+        <div class="modal-footer border-top py-2 px-4 bg-light">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeReconcileModal()" [disabled]="isActionProcessing()">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-warning btn-sm d-inline-flex align-items-center gap-1 shadow-sm px-3 text-dark fw-bold"
+            (click)="confirmReconcileReturn()"
+            [disabled]="isActionProcessing()"
+          >
+            @if (isActionProcessing()) {
+              <span class="spinner-border spinner-border-sm" role="status"></span>
+              <span>Procesando...</span>
+            } @else {
+              <i class="bi bi-check2-circle"></i>
+              <span>Confirmar Cierre y Reingreso</span>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

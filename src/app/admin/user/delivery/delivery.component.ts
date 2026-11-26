@@ -4,6 +4,8 @@ import { OrderService } from '@services/orders';
 import { ProductService } from '@services/products';
 import { CompanyContextService } from '@services/company-context';
 import { OfflineSyncService } from '@services/offline-sync';
+import { StockMovementsService } from '@services/stock-movements';
+import { CompanySettingsService } from '@services/company-settings';
 import { OrderInterface, OrderStatus } from '@interfaces/order';
 
 export type DeliveryStatus = 'PENDIENTE DE ENTREGA' | 'PAGADO' | 'ENTREGADO DEBE' | 'CUENTA CORRIENTE';
@@ -40,9 +42,12 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   private readonly _productService = inject(ProductService);
   private readonly _companyContext = inject(CompanyContextService);
   private readonly _offlineSync = inject(OfflineSyncService);
+  private readonly _stockMovementsService = inject(StockMovementsService);
+  private readonly _companySettingsService = inject(CompanySettingsService);
 
   // Estados de carga y feedback
   readonly isLoading = signal<boolean>(false);
+  readonly isActionProcessing = signal<boolean>(false);
   readonly errorMessage = signal<string | null>(null);
   readonly successMessage = signal<{ type: 'ONLINE' | 'OFFLINE'; text: string } | null>(null);
   readonly isSuccessFading = signal<boolean>(false);
@@ -55,6 +60,15 @@ export class DeliveryComponent implements OnInit, OnDestroy {
 
   // Pedidos asignados a la hoja de ruta
   readonly orders = signal<DeliveryOrderItem[]>([]);
+
+  // Modo de descuento de stock de la empresa ('ON_DELIVERY' | 'ON_TRUCK_LOAD')
+  readonly stockDeductionMode = signal<'ON_DELIVERY' | 'ON_TRUCK_LOAD'>('ON_DELIVERY');
+
+  // Estado de despacho del camión en el día
+  readonly isTruckDispatched = signal<boolean>(false);
+
+  // Modal para liquidar regreso
+  readonly isReconcileModalOpen = signal<boolean>(false);
 
   // Computed Signals
   readonly pendingDeliveries = computed<DeliveryOrderItem[]>(() =>
@@ -82,6 +96,11 @@ export class DeliveryComponent implements OnInit, OnDestroy {
     }));
   });
 
+  // Sobrante devuelto calculado automáticamente (Bolsas de pedidos no entregados / pendientes)
+  readonly returnedSurplusSummary = computed<TruckLoadItem[]>(() => {
+    return this.truckLoadSummary().filter((item) => item.totalBags > 0);
+  });
+
   readonly totalTruckBags = computed<number>(() =>
     this.truckLoadSummary().reduce((acc, item) => acc + item.totalBags, 0)
   );
@@ -102,12 +121,17 @@ export class DeliveryComponent implements OnInit, OnDestroy {
       const comp = this._companyContext.activeCompany();
       if (comp?.cmp_uuid) {
         this.loadDeliveryData();
+        this.loadStockDeductionMode(comp.cmp_uuid);
       }
     });
   }
 
   public ngOnInit(): void {
     this.loadDeliveryData();
+    const cmpUuid = this._companyContext.activeCompany()?.cmp_uuid;
+    if (cmpUuid) {
+      this.loadStockDeductionMode(cmpUuid);
+    }
   }
 
   public ngOnDestroy(): void {
@@ -136,7 +160,6 @@ export class DeliveryComponent implements OnInit, OnDestroy {
     this.isSuccessFading.set(false);
     this.successMessage.set({ type, text });
 
-    // Auto-ocultado suave a los 4 segundos con animación de fade-out
     this._successTimer = setTimeout(() => {
       this.isSuccessFading.set(true);
       this._fadeTimer = setTimeout(() => {
@@ -144,6 +167,20 @@ export class DeliveryComponent implements OnInit, OnDestroy {
         this.isSuccessFading.set(false);
       }, 400);
     }, 4000);
+  }
+
+  public loadStockDeductionMode(cmp_uuid: string): void {
+    this._companySettingsService.getCompanySettings(cmp_uuid, 'STOCK_DEDUCTION_MODE').subscribe({
+      next: (res) => {
+        const setting = (res.data || []).find((s) => s.cmps_key === 'STOCK_DEDUCTION_MODE');
+        if (setting && setting.cmps_value === 'ON_TRUCK_LOAD') {
+          this.stockDeductionMode.set('ON_TRUCK_LOAD');
+        } else {
+          this.stockDeductionMode.set('ON_DELIVERY');
+        }
+      },
+      error: () => this.stockDeductionMode.set('ON_DELIVERY'),
+    });
   }
 
   public loadDeliveryData(): void {
@@ -155,25 +192,23 @@ export class DeliveryComponent implements OnInit, OnDestroy {
     this.isLoading.set(true);
     this.errorMessage.set(null);
 
-    // Cargar Productos para consolidar estiba
+    // Cargar Catálogo de Productos
     this._productService.getProducts(cmp_uuid).subscribe({
       next: (res) => {
         if (res?.data && Array.isArray(res.data)) {
-          const finishedProducts = res.data.filter(
-            (p) => p.prd_type === 'FINISHED' && p.prd_active !== false
-          );
-          this.products.set(
-            finishedProducts.map((p) => ({
+          const prods = res.data
+            .filter((p) => p.prd_type === 'FINISHED' && p.prd_active !== false)
+            .map((p) => ({
               id: p.prd_uuid,
               name: p.prd_name
-            }))
-          );
+            }));
+          this.products.set(prods);
         }
       },
-      error: (err) => console.warn('Error al cargar productos para hoja de ruta:', err)
+      error: (err) => console.warn('Error al cargar productos:', err)
     });
 
-    // Cargar Pedidos de la empresa
+    // Cargar Pedidos de la Empresa
     this._orderService.getOrders(cmp_uuid).subscribe({
       next: (res) => {
         this.isLoading.set(false);
@@ -214,6 +249,71 @@ export class DeliveryComponent implements OnInit, OnDestroy {
     });
   }
 
+  // Despachar Carga de Camioneta (Descuenta de Cámara en modo ON_TRUCK_LOAD)
+  public dispatchTruck(): void {
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    const items = this.truckLoadSummary()
+      .filter((i) => i.totalBags > 0)
+      .map((i) => ({ prd_uuid: i.productId, quantity: i.totalBags }));
+
+    if (!cmp_uuid || items.length === 0) return;
+
+    this.isActionProcessing.set(true);
+    this._stockMovementsService.dispatchTruckLoad(cmp_uuid, items).subscribe({
+      next: () => {
+        this.isActionProcessing.set(false);
+        this.isTruckDispatched.set(true);
+        this._showSuccessFeedback('ONLINE', '¡Camioneta despachada! El stock de estiba ha sido descontado de la cámara.');
+      },
+      error: (err) => {
+        this.isActionProcessing.set(false);
+        this.errorMessage.set(err?.error?.message || 'Error al despachar y descontar carga de camioneta.');
+      }
+    });
+  }
+
+  // Abrir Modal de Cierre y Liquidación de Reparto
+  public openReconcileModal(): void {
+    this.isReconcileModalOpen.set(true);
+  }
+
+  public closeReconcileModal(): void {
+    this.isReconcileModalOpen.set(false);
+  }
+
+  // Reconciliar y Reingresar Mercadería Sobrante al Regreso
+  public confirmReconcileReturn(): void {
+    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+    const items = this.returnedSurplusSummary().map((i) => ({
+      prd_uuid: i.productId,
+      quantity: i.totalBags
+    }));
+
+    if (!cmp_uuid) return;
+
+    if (items.length === 0) {
+      this.closeReconcileModal();
+      this.isTruckDispatched.set(false);
+      this._showSuccessFeedback('ONLINE', 'Reparto finalizado. No hubo sobrante para reingresar.');
+      return;
+    }
+
+    this.isActionProcessing.set(true);
+    this._stockMovementsService.reconcileTruckReturn(cmp_uuid, items).subscribe({
+      next: () => {
+        this.isActionProcessing.set(false);
+        this.isTruckDispatched.set(false);
+        this.closeReconcileModal();
+        this._showSuccessFeedback('ONLINE', '¡Reparto liquidado! El sobrante devuelto ha sido reingresado a la cámara.');
+        this.loadDeliveryData();
+      },
+      error: (err) => {
+        this.isActionProcessing.set(false);
+        this.errorMessage.set(err?.error?.message || 'Error al reingresar sobrante a la cámara.');
+      }
+    });
+  }
+
   public markDeliveryStatus(orderId: string, status: DeliveryStatus): void {
     const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
     if (!cmp_uuid) return;
@@ -229,7 +329,6 @@ export class DeliveryComponent implements OnInit, OnDestroy {
     // Mapeo a convención del backend
     const backendStatus: OrderStatus = this._mapToBackendStatus(status);
 
-    // Si estamos sin conexión, encolar en IndexedDB directamente sin revertir
     if (!this._offlineSync.isOnline()) {
       this._offlineSync.enqueueOrderStatusUpdate(cmp_uuid, orderId, backendStatus);
       this._showSuccessFeedback(
@@ -239,59 +338,38 @@ export class DeliveryComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this._orderService
-      .updateOrder(cmp_uuid, orderId, { ord_status: backendStatus })
-      .subscribe({
-        next: () => {
-          this._showSuccessFeedback(
-            'ONLINE',
-            `Entrega confirmada como "${status}" en el servidor con éxito.`
-          );
-        },
-        error: (err) => {
-          // Si el fallo fue por corte repentino de red, encolar offline
-          if (!navigator.onLine || err.status === 0) {
-            this._offlineSync.enqueueOrderStatusUpdate(cmp_uuid, orderId, backendStatus);
-            this._showSuccessFeedback(
-              'OFFLINE',
-              `Se perdió la señal: entrega marcada localmente como "${status}". Se subirá automáticamente.`
-            );
-            return;
-          }
-
-          console.error('Error al persistir estado de entrega:', err);
-          // Reversión optimista ante error real de validación en el servidor
-          if (previousStatus) {
-            this.orders.update((list) =>
-              list.map((order) =>
-                order.id === orderId ? { ...order, status: previousStatus } : order
-              )
-            );
-          }
-          this.dismissSuccessMessage();
-          const msg =
-            err.error?.error ||
-            err.error?.message ||
-            'No se pudo guardar el cambio de estado en el servidor.';
-          this.errorMessage.set(msg);
-        }
-      });
+    this._orderService.updateOrder(cmp_uuid, orderId, { ord_status: backendStatus }).subscribe({
+      next: () => {
+        this._showSuccessFeedback('ONLINE', `Entrega registrada exitosamente como "${status}".`);
+      },
+      error: (err) => {
+        console.error('Error al actualizar estado del pedido:', err);
+        this.orders.update((list) =>
+          list.map((order) => (order.id === orderId ? { ...order, status: previousStatus! } : order))
+        );
+        this.errorMessage.set('No se pudo confirmar la entrega. Se restauró el estado original.');
+      }
+    });
   }
 
-  public openNavigationMap(order: DeliveryOrderItem): void {
-    if (order.lat && order.lng) {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${order.lat},${order.lng}`, '_blank');
-      return;
+  public getStatusBadgeClass(status: DeliveryStatus): string {
+    switch (status) {
+      case 'PAGADO':
+        return 'badge-pagado';
+      case 'ENTREGADO DEBE':
+        return 'badge-debe';
+      case 'CUENTA CORRIENTE':
+        return 'badge-ctacte';
+      default:
+        return 'badge-pendiente';
     }
-    const encoded = encodeURIComponent(order.address);
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, '_blank');
   }
 
   public formatMoney(amount: number): string {
     return '$' + amount.toLocaleString('es-AR');
   }
 
-  private _mapToDeliveryStatus(backendStatus: OrderStatus | string): DeliveryStatus {
+  private _mapToDeliveryStatus(backendStatus: OrderStatus): DeliveryStatus {
     switch (backendStatus) {
       case 'PAGADO':
         return 'PAGADO';
@@ -304,8 +382,8 @@ export class DeliveryComponent implements OnInit, OnDestroy {
     }
   }
 
-  private _mapToBackendStatus(deliveryStatus: DeliveryStatus): OrderStatus {
-    switch (deliveryStatus) {
+  private _mapToBackendStatus(status: DeliveryStatus): OrderStatus {
+    switch (status) {
       case 'PAGADO':
         return 'PAGADO';
       case 'ENTREGADO DEBE':
