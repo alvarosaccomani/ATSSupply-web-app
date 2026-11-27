@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { OrderService } from '@services/orders';
 import { ProductService } from '@services/products';
@@ -8,6 +8,7 @@ import { StockMovementsService } from '@services/stock-movements';
 import { CompanySettingsService } from '@services/company-settings';
 import { UserRolesCompanyService } from '@services/user-roles-company';
 import { AuthService } from '@services/auth';
+import { MapComponent, MapMarker } from '@components/map/map';
 import { OrderInterface, OrderStatus } from '@interfaces/order';
 
 export type DeliveryStatus = 'PENDIENTE DE ENTREGA' | 'PAGADO' | 'ENTREGADO DEBE' | 'CUENTA CORRIENTE';
@@ -38,11 +39,13 @@ export interface TruckLoadItem {
 @Component({
   selector: 'app-delivery',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, MapComponent],
   templateUrl: './delivery.component.html',
   styleUrl: './delivery.component.scss'
 })
 export class DeliveryComponent implements OnInit, OnDestroy {
+  @ViewChild(MapComponent) mapComponent?: MapComponent;
+
   private readonly _orderService = inject(OrderService);
   private readonly _productService = inject(ProductService);
   private readonly _companyContext = inject(CompanyContextService);
@@ -51,6 +54,12 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   private readonly _companySettingsService = inject(CompanySettingsService);
   private readonly _userRolesCompanyService = inject(UserRolesCompanyService);
   private readonly _authService = inject(AuthService);
+
+  // Modo de visualización: 'LIST' (solo lista), 'MAP' (solo mapa), 'SPLIT' (lista y mapa en pantalla)
+  readonly activeDeliveryView = signal<'LIST' | 'MAP' | 'SPLIT'>('SPLIT');
+
+  // Parada seleccionada/enfocada
+  readonly selectedOrderForMap = signal<string | null>(null);
 
   // Estados de carga y feedback
   readonly isLoading = signal<boolean>(false);
@@ -171,6 +180,90 @@ export class DeliveryComponent implements OnInit, OnDestroy {
       .filter((o) => o.status === 'PAGADO')
       .reduce((acc, o) => acc + o.total, 0)
   );
+
+  // Pedidos pendientes que no tienen coordenadas GPS fijadas
+  readonly pendingWithoutGps = computed<DeliveryOrderItem[]>(() =>
+    this.pendingDeliveries().filter((o) => o.lat == null || o.lng == null)
+  );
+
+  // Marcadores interactivos para el mapa de ruta
+  readonly routeMarkers = computed<MapMarker[]>(() => {
+    const markers: MapMarker[] = [];
+    const selectedId = this.selectedOrderForMap();
+
+    // 1. Entregas pendientes (numeradas: 1, 2, 3...)
+    this.pendingDeliveries().forEach((o, index) => {
+      if (o.lat != null && o.lng != null) {
+        const isSelected = selectedId === o.id;
+        markers.push({
+          id: o.id,
+          lng: o.lng,
+          lat: o.lat,
+          title: o.customerName,
+          label: String(index + 1),
+          color: isSelected ? '#ef4444' : '#0284c7',
+          popupHtml: `
+            <div class="p-1">
+              <span class="badge bg-primary mb-1">Parada #${index + 1}</span>
+              <strong class="d-block text-dark">${o.customerName}</strong>
+              <small class="text-muted d-block mb-1">${o.address}</small>
+              <div class="fw-bold text-success mb-1">${this.formatMoney(o.total)}</div>
+              <div class="small text-secondary fst-italic">${o.detailSummary}</div>
+            </div>
+          `
+        });
+      }
+    });
+
+    // 2. Entregas completadas hoy (tilde verde)
+    this.completedDeliveries().forEach((o) => {
+      if (o.lat != null && o.lng != null) {
+        markers.push({
+          id: o.id,
+          lng: o.lng,
+          lat: o.lat,
+          title: o.customerName,
+          label: '✓',
+          color: '#10b981',
+          popupHtml: `
+            <div class="p-1">
+              <span class="badge bg-success mb-1">Entregado</span>
+              <strong class="d-block text-dark">${o.customerName}</strong>
+              <small class="text-muted d-block mb-1">${o.address}</small>
+              <div class="fw-bold text-dark">${this.formatMoney(o.total)}</div>
+            </div>
+          `
+        });
+      }
+    });
+
+    return markers;
+  });
+
+  // Trazado de línea GeoJSON conectando las paradas pendientes en orden
+  readonly routeCoordinates = computed<[number, number][]>(() => {
+    return this.pendingDeliveries()
+      .filter((o) => o.lng != null && o.lat != null)
+      .map((o) => [o.lng!, o.lat!] as [number, number]);
+  });
+
+  // Centro dinámico del mapa
+  readonly deliveryMapCenter = computed<[number, number]>(() => {
+    const selectedId = this.selectedOrderForMap();
+    if (selectedId) {
+      const order = this.orders().find((o) => o.id === selectedId);
+      if (order?.lng != null && order?.lat != null) {
+        return [order.lng, order.lat];
+      }
+    }
+
+    const firstWithGps = this.visibleOrders().find((o) => o.lng != null && o.lat != null);
+    if (firstWithGps && firstWithGps.lng && firstWithGps.lat) {
+      return [firstWithGps.lng, firstWithGps.lat];
+    }
+
+    return [-64.1888, -31.4201];
+  });
 
   constructor() {
     // Reaccionar automáticamente ante cambios de compañía activa
@@ -580,6 +673,31 @@ export class DeliveryComponent implements OnInit, OnDestroy {
 
   public formatMoney(amount: number): string {
     return '$' + amount.toLocaleString('es-AR');
+  }
+
+  public setDeliveryView(view: 'LIST' | 'MAP' | 'SPLIT'): void {
+    this.activeDeliveryView.set(view);
+    setTimeout(() => this.mapComponent?.resize(), 100);
+  }
+
+  public focusOrderOnMap(order: DeliveryOrderItem): void {
+    if (order.lng == null || order.lat == null) return;
+    this.selectedOrderForMap.set(order.id);
+    if (this.activeDeliveryView() === 'LIST') {
+      this.activeDeliveryView.set('SPLIT');
+    }
+    setTimeout(() => {
+      this.mapComponent?.resize();
+      this.mapComponent?.map?.flyTo({
+        center: [order.lng!, order.lat!],
+        zoom: 15,
+        essential: true
+      });
+    }, 150);
+  }
+
+  public onMapMarkerClick(marker: MapMarker): void {
+    this.selectedOrderForMap.set(String(marker.id));
   }
 
   private _mapToDeliveryStatus(backendStatus: OrderStatus): DeliveryStatus {

@@ -147,11 +147,48 @@
 
   <!-- Columna Derecha: Hoja de Ruta / Paradas de Reparto -->
   <div class="col-12 col-lg-8">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h6 class="fw-bold text-uppercase text-muted mb-0" style="font-size: 0.8rem;">
-        Hoja de Ruta / Entregas Pendientes ({{ pendingDeliveries().length }})
-      </h6>
-      <span class="badge bg-light text-secondary border">Jornada Activa</span>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div>
+        <h6 class="fw-bold text-uppercase text-muted mb-0" style="font-size: 0.8rem;">
+          Hoja de Ruta / Entregas Pendientes ({{ pendingDeliveries().length }})
+        </h6>
+        @if (pendingWithoutGps().length > 0) {
+          <small class="text-warning d-block" style="font-size: 0.72rem;">
+            <i class="bi bi-exclamation-triangle me-1"></i>{{ pendingWithoutGps().length }} sin ubicación GPS fijada
+          </small>
+        }
+      </div>
+
+      <!-- Selector de Vista: Lista / Mapa / Ambos -->
+      <div class="btn-group btn-group-sm shadow-sm" role="group" aria-label="Modo de vista">
+        <button
+          type="button"
+          class="btn"
+          [ngClass]="activeDeliveryView() === 'LIST' ? 'btn-primary' : 'btn-outline-secondary'"
+          (click)="setDeliveryView('LIST')"
+          title="Ver solo lista"
+        >
+          <i class="bi bi-list-task me-1"></i>Lista
+        </button>
+        <button
+          type="button"
+          class="btn"
+          [ngClass]="activeDeliveryView() === 'SPLIT' ? 'btn-primary' : 'btn-outline-secondary'"
+          (click)="setDeliveryView('SPLIT')"
+          title="Ver lista y mapa"
+        >
+          <i class="bi bi-layout-split me-1"></i>Ambos
+        </button>
+        <button
+          type="button"
+          class="btn"
+          [ngClass]="activeDeliveryView() === 'MAP' ? 'btn-primary' : 'btn-outline-secondary'"
+          (click)="setDeliveryView('MAP')"
+          title="Ver solo mapa"
+        >
+          <i class="bi bi-map me-1"></i>Mapa
+        </button>
+      </div>
     </div>
 
     @if (successMessage(); as success) {
@@ -183,40 +220,88 @@
       </div>
     }
 
-    <div class="d-flex flex-column gap-3">
-      @for (order of pendingDeliveries(); track order.id) {
-        <div class="ats-card delivery-card p-3 p-lg-4">
-          <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2 mb-2">
-            <div>
-              <div class="d-flex align-items-center gap-2">
-                <span class="fw-bold fs-5 text-dark">{{ order.customerName }}</span>
-                @if (order.hasCredit) {
-                  <span class="badge bg-info-subtle text-info border border-info-subtle fw-semibold" style="font-size: 0.65rem;">
-                    <i class="bi bi-journal-check me-1"></i>CTA. CTE.
-                  </span>
-                }
-              </div>
-              <div class="text-muted small mt-1">
-                <i class="bi bi-geo-alt-fill text-danger me-1"></i>{{ order.address }}
-                @if (order.phone) {
-                  <span class="ms-2">
-                    <i class="bi bi-telephone-fill text-primary me-1"></i>
-                    <a [href]="'tel:' + order.phone" class="text-decoration-none text-muted">
-                      {{ order.phone }}
-                    </a>
-                  </span>
-                }
-              </div>
-            </div>
+    <!-- Mapa de Ruta Interactivo -->
+    @if (activeDeliveryView() === 'MAP' || activeDeliveryView() === 'SPLIT') {
+      <div class="card border-0 shadow-sm mb-3 overflow-hidden rounded-3">
+        <div class="card-header bg-light py-2 px-3 d-flex justify-content-between align-items-center">
+          <span class="small fw-bold text-secondary">
+            <i class="bi bi-map me-1 text-primary"></i>MAPA DE PARADAS Y RECORRIDO
+          </span>
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.68rem;">
+            {{ routeMarkers().length }} paradas marcadas
+          </span>
+        </div>
+        <div style="height: 380px; width: 100%; position: relative;">
+          <app-map
+            [markers]="routeMarkers()"
+            [routeCoordinates]="routeCoordinates()"
+            [center]="deliveryMapCenter()"
+            [zoom]="12"
+            (markerClick)="onMapMarkerClick($event)"
+          ></app-map>
+        </div>
+      </div>
+    }
 
-            <!-- Importe Total a Cobrar -->
-            <div class="text-sm-end">
-              <span class="fw-bold fs-4 text-primary d-block">{{ formatMoney(order.total) }}</span>
-              <span class="badge bg-warning text-dark border" style="font-size: 0.7rem;">
-                {{ order.status }}
-              </span>
+    @if (activeDeliveryView() === 'LIST' || activeDeliveryView() === 'SPLIT') {
+      <div class="d-flex flex-column gap-3">
+        @for (order of pendingDeliveries(); track order.id; let i = $index) {
+          <div
+            class="ats-card delivery-card p-3 p-lg-4"
+            [class.border-primary]="selectedOrderForMap() === order.id"
+            [style.border-width.px]="selectedOrderForMap() === order.id ? 2 : 1"
+          >
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2 mb-2">
+              <div>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold" style="font-size: 0.72rem;">
+                    #{{ i + 1 }}
+                  </span>
+                  <span class="fw-bold fs-5 text-dark">{{ order.customerName }}</span>
+                  @if (order.hasCredit) {
+                    <span class="badge bg-info-subtle text-info border border-info-subtle fw-semibold" style="font-size: 0.65rem;">
+                      <i class="bi bi-journal-check me-1"></i>CTA. CTE.
+                    </span>
+                  }
+                </div>
+                <div class="text-muted small mt-1 d-flex flex-wrap align-items-center gap-2">
+                  <span>
+                    <i class="bi bi-geo-alt-fill text-danger me-1"></i>{{ order.address }}
+                  </span>
+                  @if (order.lat != null && order.lng != null) {
+                    <button
+                      type="button"
+                      class="btn btn-outline-primary py-0 px-2 d-inline-flex align-items-center gap-1 shadow-none"
+                      style="font-size: 0.7rem; height: 22px;"
+                      (click)="focusOrderOnMap(order)"
+                      title="Centrar en el mapa"
+                    >
+                      <i class="bi bi-crosshair"></i>Ver en mapa
+                    </button>
+                  } @else {
+                    <span class="badge bg-light text-muted border" style="font-size: 0.65rem;">
+                      Sin GPS
+                    </span>
+                  }
+                  @if (order.phone) {
+                    <span>
+                      <i class="bi bi-telephone-fill text-primary me-1"></i>
+                      <a [href]="'tel:' + order.phone" class="text-decoration-none text-muted">
+                        {{ order.phone }}
+                      </a>
+                    </span>
+                  }
+                </div>
+              </div>
+
+              <!-- Importe Total a Cobrar -->
+              <div class="text-sm-end">
+                <span class="fw-bold fs-4 text-primary d-block">{{ formatMoney(order.total) }}</span>
+                <span class="badge bg-warning text-dark border" style="font-size: 0.7rem;">
+                  {{ order.status }}
+                </span>
+              </div>
             </div>
-          </div>
 
           <!-- Resumen de Ítems del Pedido -->
           <div class="p-2 bg-light rounded-3 mb-2 small">
@@ -304,6 +389,7 @@
         </div>
       }
     </div>
+  }
 
     <!-- Historial de Entregas Realizadas en el Día -->
     @if (completedDeliveries().length > 0) {
