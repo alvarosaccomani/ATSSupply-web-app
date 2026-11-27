@@ -9,7 +9,11 @@ import { CompanyContextService } from '@services/company-context';
 import { AuthService } from '@services/auth';
 import { OfflineSyncService } from '@services/offline-sync';
 import { IndexedDbService } from '@services/indexed-db';
+import { PriceTierService } from '@services/price-tiers';
+import { CustomerFormModal } from '@components/customer-form-modal/customer-form-modal';
 import { OrderCreateInput, OrderStatus } from '@interfaces/order';
+import { PriceTierInterface } from '@interfaces/price-tier';
+import { CustomerInterface } from '@interfaces/customer';
 
 export type PriceTierCode = 'A' | 'B' | 'C';
 
@@ -42,7 +46,7 @@ export interface CartItem {
 @Component({
   selector: 'app-new-order',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CustomerFormModal],
   templateUrl: './new-order.component.html',
   styleUrl: './new-order.component.scss'
 })
@@ -55,6 +59,7 @@ export class NewOrderComponent implements OnInit, OnDestroy {
   private readonly _authService = inject(AuthService);
   private readonly _offlineSync = inject(OfflineSyncService);
   private readonly _indexedDb = inject(IndexedDbService);
+  private readonly _priceTierService = inject(PriceTierService);
 
   // Estado de carga y feedback
   readonly isLoading = signal<boolean>(false);
@@ -68,6 +73,7 @@ export class NewOrderComponent implements OnInit, OnDestroy {
 
   // Clientes cargados para POS
   readonly customers = signal<PosCustomer[]>([]);
+  readonly priceTiers = signal<PriceTierInterface[]>([]);
   readonly selectedCustomerId = signal<string>('');
   readonly isDetectingLocation = signal<boolean>(false);
   readonly nearestCustomerNotice = signal<{ name: string; distanceFormatted: string } | null>(null);
@@ -81,14 +87,8 @@ export class NewOrderComponent implements OnInit, OnDestroy {
   readonly orderStatus = signal<string>('PENDIENTE DE ENTREGA');
   readonly orderNotes = signal<string>('');
 
-  // Modal Alta Rápida de Cliente
+  // Modal Alta Rápida de Cliente (Componente Reutilizable)
   readonly showQuickCustomerModal = signal<boolean>(false);
-  readonly isSavingCustomer = signal<boolean>(false);
-  readonly modalErrorMessage = signal<string | null>(null);
-  readonly newCustomerName = signal<string>('');
-  readonly newCustomerAddress = signal<string>('');
-  readonly newCustomerPhone = signal<string>('');
-  readonly newCustomerTier = signal<PriceTierCode>('C');
 
   // Computed Signals
   readonly selectedCustomer = computed<PosCustomer | undefined>(() => {
@@ -197,6 +197,18 @@ export class NewOrderComponent implements OnInit, OnDestroy {
 
     this.isLoading.set(true);
     this.errorMessage.set(null);
+
+    // Cargar Listas de Precios
+    this._priceTierService.getPriceTiers(cmp_uuid).subscribe({
+      next: (res) => {
+        if (res?.data && Array.isArray(res.data)) {
+          this.priceTiers.set(res.data);
+        }
+      },
+      error: (err) => {
+        console.warn('No se pudieron cargar las listas de precios en POS:', err);
+      }
+    });
 
     // Cargar Clientes
     this._customerService.getCustomers(cmp_uuid).subscribe({
@@ -530,80 +542,39 @@ export class NewOrderComponent implements OnInit, OnDestroy {
   }
 
   public openQuickCustomerModal(): void {
-    this.newCustomerName.set('');
-    this.newCustomerAddress.set('');
-    this.newCustomerPhone.set('');
-    this.newCustomerTier.set('C');
-    this.modalErrorMessage.set(null);
-    this.isSavingCustomer.set(false);
     this.showQuickCustomerModal.set(true);
   }
 
-  public closeQuickCustomerModal(): void {
-    if (this.isSavingCustomer()) return;
+  public onQuickCustomerClosed(): void {
     this.showQuickCustomerModal.set(false);
-    this.modalErrorMessage.set(null);
   }
 
-  public saveQuickCustomer(): void {
-    const name = this.newCustomerName().trim();
-    const address = this.newCustomerAddress().trim();
+  public onQuickCustomerSaved(savedCus: CustomerInterface): void {
+    if (savedCus && savedCus.cus_uuid) {
+      const rawTier = (savedCus.priceTier?.prct_code || 'C').toUpperCase();
+      const tierCode: PriceTierCode = ['A', 'B', 'C'].includes(rawTier)
+        ? (rawTier as PriceTierCode)
+        : 'C';
 
-    if (!name || !address) {
-      this.modalErrorMessage.set('El nombre y la dirección son obligatorios.');
-      return;
+      const newCus: PosCustomer = {
+        id: savedCus.cus_uuid,
+        name: savedCus.cus_name,
+        address: savedCus.cus_address,
+        phone: savedCus.cus_phone || '',
+        lat: savedCus.cus_lat !== undefined && savedCus.cus_lat !== null ? Number(savedCus.cus_lat) : null,
+        lng: savedCus.cus_lng !== undefined && savedCus.cus_lng !== null ? Number(savedCus.cus_lng) : null,
+        tier: tierCode
+      };
+
+      this.customers.update((list) => [newCus, ...list]);
+      this.selectedCustomerId.set(newCus.id);
+      this.showQuickCustomerModal.set(false);
+
+      const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
+      if (cmp_uuid) {
+        this._indexedDb.saveCustomers(cmp_uuid, [savedCus]);
+      }
     }
-
-    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
-    if (!cmp_uuid) {
-      this.modalErrorMessage.set('No se encontró una empresa activa seleccionada.');
-      return;
-    }
-
-    this.isSavingCustomer.set(true);
-    this.modalErrorMessage.set(null);
-
-    // Persistir cliente en backend
-    this._customerService
-      .saveCustomer({
-        cmp_uuid,
-        cus_name: name.toUpperCase(),
-        cus_address: address,
-        cus_phone: this.newCustomerPhone().trim(),
-        cus_active: true
-      })
-      .subscribe({
-        next: (res) => {
-          this.isSavingCustomer.set(false);
-          const savedCus = res?.data;
-          if (savedCus && savedCus.cus_uuid) {
-            const newCus: PosCustomer = {
-              id: savedCus.cus_uuid,
-              name: savedCus.cus_name,
-              address: savedCus.cus_address,
-              phone: savedCus.cus_phone || '',
-              lat: savedCus.cus_lat !== undefined && savedCus.cus_lat !== null ? Number(savedCus.cus_lat) : null,
-              lng: savedCus.cus_lng !== undefined && savedCus.cus_lng !== null ? Number(savedCus.cus_lng) : null,
-              tier: this.newCustomerTier()
-            };
-
-            this.customers.update((list) => [newCus, ...list]);
-            this.selectedCustomerId.set(newCus.id);
-            this.showQuickCustomerModal.set(false);
-          } else {
-            this.modalErrorMessage.set('No se recibieron los datos del cliente creado.');
-          }
-        },
-        error: (err) => {
-          this.isSavingCustomer.set(false);
-          const msg =
-            err.error?.error ||
-            err.error?.message ||
-            'Error al persistir cliente rápido en el servidor.';
-          this.modalErrorMessage.set(msg);
-          console.warn('Error al persistir cliente rápido:', err);
-        }
-      });
   }
 
   public formatMoney(amount: number): string {
