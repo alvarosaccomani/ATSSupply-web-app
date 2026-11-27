@@ -33,6 +33,13 @@ export interface MapMarker {
   draggable?: boolean;
 }
 
+export interface HeatPoint {
+  lng: number;
+  lat: number;
+  weight?: number; // Ponderación de calor (volumen de ventas, facturación o frecuencia)
+  title?: string;
+}
+
 @Component({
   selector: 'app-map',
   standalone: true,
@@ -47,6 +54,8 @@ export class MapComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() zoom = 12;
   @Input() markers: MapMarker[] = [];
   @Input() routeCoordinates: [number, number][] = []; // [lng, lat][] para trazar ruta de recorrido
+  @Input() heatPoints: HeatPoint[] = []; // Puntos para capa de calor comercial
+  @Input() enableHeatmap = false; // Alterna la visualización de la capa heatmap
   @Input() interactive = true;
   @Input() height = '100%';
   @Input() selectablePoint = false; // Permite hacer click para colocar un pin nuevo (alta cliente)
@@ -98,11 +107,18 @@ export class MapComponent implements AfterViewInit, OnChanges, OnDestroy {
       this._renderRoute();
     }
 
+    if (changes['heatPoints'] || changes['enableHeatmap']) {
+      this._renderHeatmap();
+    }
+
     if (changes['center'] && !changes['center'].firstChange) {
       this.map.flyTo({ center: this.center, zoom: this.zoom });
     }
 
-    if (this.autoFit && (changes['markers'] || changes['routeCoordinates'])) {
+    if (
+      this.autoFit &&
+      (changes['markers'] || changes['routeCoordinates'] || changes['heatPoints'] || changes['enableHeatmap'])
+    ) {
       this._fitBounds();
     }
   }
@@ -140,8 +156,10 @@ export class MapComponent implements AfterViewInit, OnChanges, OnDestroy {
     map.on('load', () => {
       this._isMapReady = true;
       this._initRouteLayer();
+      this._initHeatmapLayer();
       this._renderMarkers();
       this._renderRoute();
+      this._renderHeatmap();
       if (this.autoFit) {
         this._fitBounds();
       }
@@ -291,6 +309,140 @@ export class MapComponent implements AfterViewInit, OnChanges, OnDestroy {
     }
   }
 
+  private _initHeatmapLayer(): void {
+    if (!this.map || this.map.getSource('heatmap-source')) return;
+
+    this.map.addSource('heatmap-source', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: []
+      }
+    });
+
+    // 1. Capa de gradiente térmico difuso (Aura de calor)
+    this.map.addLayer({
+      id: 'heatmap-layer',
+      type: 'heatmap',
+      source: 'heatmap-source',
+      layout: {
+        visibility: this.enableHeatmap ? 'visible' : 'none'
+      },
+      paint: {
+        // Ponderar por la propiedad 'weight' (1 a 3 para asegurar visibilidad aún con 1 solo cliente)
+        'heatmap-weight': [
+          'interpolate',
+          ['linear'],
+          ['get', 'weight'],
+          0, 0.5,
+          1, 2.5
+        ],
+        // Intensidad ajustada para que pocos puntos no se desvanezcan con el zoom
+        'heatmap-intensity': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          0, 2,
+          9, 4,
+          15, 6
+        ],
+        // Rampa de color sensible desde densidades muy bajas (0.01) para puntos aislados
+        'heatmap-color': [
+          'interpolate',
+          ['linear'],
+          ['heatmap-density'],
+          0, 'rgba(0, 0, 0, 0)',
+          0.01, 'rgba(59, 130, 246, 0.5)',
+          0.15, 'rgb(34, 197, 94)',
+          0.4, 'rgb(234, 179, 8)',
+          0.7, 'rgb(249, 115, 22)',
+          1, 'rgb(239, 68, 68)'
+        ],
+        // Radio térmico expansivo
+        'heatmap-radius': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          0, 20,
+          8, 35,
+          12, 60,
+          16, 90
+        ],
+        'heatmap-opacity': 0.8
+      }
+    });
+
+    // 2. Capa de círculos luminosos para asegurar visibilidad exacta de cada cliente geolocalizado
+    this.map.addLayer({
+      id: 'heatmap-point-layer',
+      type: 'circle',
+      source: 'heatmap-source',
+      layout: {
+        visibility: this.enableHeatmap ? 'visible' : 'none'
+      },
+      paint: {
+        'circle-radius': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          8, 8,
+          12, 14,
+          16, 24
+        ],
+        'circle-color': [
+          'interpolate',
+          ['linear'],
+          ['get', 'weight'],
+          0, '#3b82f6',
+          0.3, '#10b981',
+          0.6, '#f59e0b',
+          1, '#ef4444'
+        ],
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': 2.5,
+        'circle-opacity': 0.95
+      }
+    });
+  }
+
+  private _renderHeatmap(): void {
+    if (!this.map || !this._isMapReady) return;
+
+    const vis = this.enableHeatmap ? 'visible' : 'none';
+    if (this.map.getLayer('heatmap-layer')) {
+      this.map.setLayoutProperty('heatmap-layer', 'visibility', vis);
+    }
+    if (this.map.getLayer('heatmap-point-layer')) {
+      this.map.setLayoutProperty('heatmap-point-layer', 'visibility', vis);
+    }
+
+    const source = this.map.getSource('heatmap-source') as GeoJSONSource;
+    if (!source) return;
+
+    const validPoints = this.heatPoints.filter((p) => p.lng != null && p.lat != null);
+    const maxWeight = Math.max(...validPoints.map((p) => p.weight || 1), 1);
+
+    const features = validPoints.map((p) => {
+      const normalizedWeight = maxWeight > 0 ? (p.weight || 1) / maxWeight : 1;
+      return {
+        type: 'Feature' as const,
+        properties: {
+          weight: Math.max(0.25, normalizedWeight),
+          title: p.title || ''
+        },
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [p.lng, p.lat]
+        }
+      };
+    });
+
+    source.setData({
+      type: 'FeatureCollection',
+      features
+    });
+  }
+
   private _fitBounds(): void {
     if (!this.map || !this._isMapReady) return;
 
@@ -305,6 +457,14 @@ export class MapComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.routeCoordinates.forEach((p) => {
       allPoints.push(p);
     });
+
+    if (this.enableHeatmap) {
+      this.heatPoints.forEach((p) => {
+        if (p.lng != null && p.lat != null) {
+          allPoints.push([p.lng, p.lat]);
+        }
+      });
+    }
 
     if (allPoints.length === 0) return;
 
