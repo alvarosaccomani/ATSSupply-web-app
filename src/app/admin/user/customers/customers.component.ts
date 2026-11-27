@@ -6,6 +6,7 @@ import { CustomerService } from '@services/customers';
 import { PriceTierService } from '@services/price-tiers';
 import { CompanyContextService } from '@services/company-context';
 import { CustomerMovementsService } from '@services/customer-movements';
+import { MapComponent, MapMarker } from '@components/map/map';
 import { PriceTierInterface } from '@interfaces/price-tier';
 import { CustomerInterface } from '@interfaces/customer';
 import { CustomerMovementInterface } from '@interfaces/customer-movement';
@@ -27,7 +28,7 @@ export interface CustomerViewItem {
 @Component({
   selector: 'app-customers',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, MapComponent],
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.scss'
 })
@@ -98,6 +99,42 @@ export class CustomersComponent implements OnInit {
       tierB: list.filter((c) => c.tier === 'B').length,
       tierC: list.filter((c) => c.tier === 'C').length
     };
+  });
+
+  // Centro reactivo para el mapa de geolocalización de cliente
+  readonly customerMapCenter = computed<[number, number]>(() => {
+    const lat = this.newCustomerLat();
+    const lng = this.newCustomerLng();
+    if (lat != null && lng != null) {
+      return [lng, lat];
+    }
+    // Si no tiene ubicación aún, buscar si algún cliente cargado tiene GPS para centrar en la zona
+    const firstWithGps = this.customers().find((c) => c.lat != null && c.lng != null);
+    if (firstWithGps && firstWithGps.lng && firstWithGps.lat) {
+      return [firstWithGps.lng, firstWithGps.lat];
+    }
+    // Default: Córdoba, Argentina
+    return [-64.1888, -31.4201];
+  });
+
+  // Pin reactivo en el mapa
+  readonly customerMapMarkers = computed<MapMarker[]>(() => {
+    const lat = this.newCustomerLat();
+    const lng = this.newCustomerLng();
+    if (lat == null || lng == null) return [];
+
+    const name = this.newCustomerName().trim() || 'Ubicación seleccionada';
+    return [
+      {
+        id: 'customer-pin',
+        lng,
+        lat,
+        title: name,
+        color: '#ef4444',
+        draggable: true,
+        popupHtml: `<strong>${name}</strong><br><span class="text-muted small">Arrastrá el pin para ajustar la entrada</span>`
+      }
+    ];
   });
 
   constructor() {
@@ -238,6 +275,16 @@ export class CustomersComponent implements OnInit {
         maximumAge: 0
       }
     );
+  }
+
+  public onMapPointSelected(coords: { lng: number; lat: number }): void {
+    this.newCustomerLat.set(Number(coords.lat.toFixed(6)));
+    this.newCustomerLng.set(Number(coords.lng.toFixed(6)));
+  }
+
+  public clearCustomerGps(): void {
+    this.newCustomerLat.set(null);
+    this.newCustomerLng.set(null);
   }
 
   public openQuickCustomerModal(): void {

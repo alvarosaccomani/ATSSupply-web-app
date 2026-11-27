@@ -226,50 +226,83 @@
             />
           </div>
 
-          <!-- Ubicación Geográfica (GPS) -->
+          <!-- Ubicación Geográfica (GPS y Mapa Interactivo) -->
           <div class="p-3 bg-light rounded-3 mb-3 border">
-            <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
               <label class="form-label small fw-bold mb-0 text-secondary">
-                <i class="bi bi-geo-alt-fill text-danger me-1"></i>Coordenadas GPS (Opcional)
+                <i class="bi bi-geo-alt-fill text-danger me-1"></i>Ubicación Geográfica en Mapa (GPS)
               </label>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1"
-                [disabled]="isLocating() || isSaving()"
-                (click)="getCurrentLocation()"
-              >
-                @if (isLocating()) {
-                  <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                  Obteniendo GPS...
-                } @else {
-                  <i class="bi bi-crosshair me-1"></i>Capturar mi ubicación
+              <div class="d-flex align-items-center gap-1">
+                @if (newCustomerLat() && newCustomerLng()) {
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-danger py-0 px-2"
+                    style="font-size: 0.72rem; height: 26px;"
+                    title="Limpiar coordenadas"
+                    (click)="clearCustomerGps()"
+                  >
+                    <i class="bi bi-x-circle me-1"></i>Limpiar pin
+                  </button>
                 }
-              </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1"
+                  [disabled]="isLocating() || isSaving()"
+                  (click)="getCurrentLocation()"
+                >
+                  @if (isLocating()) {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    Obteniendo GPS...
+                  } @else {
+                    <i class="bi bi-crosshair me-1"></i>Mi GPS actual
+                  }
+                </button>
+              </div>
             </div>
+
+            <p class="text-muted small mb-2" style="font-size: 0.75rem;">
+              <i class="bi bi-hand-index-thumb me-1"></i>Hacé click en el mapa o arrastrá el pin rojo para marcar la entrada o galpón exacto del cliente:
+            </p>
+
+            <!-- MAPA INTERACTIVO MAPLIBRE GL -->
+            <div class="mb-2">
+              <app-map
+                [center]="customerMapCenter()"
+                [zoom]="newCustomerLat() ? 15 : 13"
+                [selectablePoint]="true"
+                [markers]="customerMapMarkers()"
+                [autoFit]="false"
+                height="220px"
+                (pointSelect)="onMapPointSelected($event)"
+              ></app-map>
+            </div>
+
+            <!-- Coordenadas numéricas -->
             <div class="row g-2">
               <div class="col-6">
-                <label class="form-label text-muted mb-1" style="font-size: 0.75rem;">Latitud</label>
+                <label class="form-label text-muted mb-1" style="font-size: 0.72rem;">Latitud</label>
                 <input
                   type="number"
                   step="any"
                   class="form-control form-control-sm"
-                  placeholder="Ej: -34.603722"
+                  placeholder="Ej: -31.4201"
                   [ngModel]="newCustomerLat()"
                   (ngModelChange)="newCustomerLat.set($event)"
                 />
               </div>
               <div class="col-6">
-                <label class="form-label text-muted mb-1" style="font-size: 0.75rem;">Longitud</label>
+                <label class="form-label text-muted mb-1" style="font-size: 0.72rem;">Longitud</label>
                 <input
                   type="number"
                   step="any"
                   class="form-control form-control-sm"
-                  placeholder="Ej: -58.381592"
+                  placeholder="Ej: -64.1888"
                   [ngModel]="newCustomerLng()"
                   (ngModelChange)="newCustomerLng.set($event)"
                 />
               </div>
             </div>
+
             @if (newCustomerLat() && newCustomerLng()) {
               <div class="mt-2 text-success small d-flex align-items-center justify-content-between">
                 <span>
@@ -281,7 +314,7 @@
                   rel="noopener noreferrer"
                   class="small text-decoration-none text-primary fw-semibold"
                 >
-                  <i class="bi bi-box-arrow-up-right me-1"></i>Probar en Maps
+                  <i class="bi bi-box-arrow-up-right me-1"></i>Ver en Google Maps
                 </a>
               </div>
             }
