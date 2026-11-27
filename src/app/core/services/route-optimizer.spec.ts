@@ -1,12 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { RouteOptimizer } from './route-optimizer';
+import { RouteOptimizerService } from './route-optimizer';
 
-describe('RouteOptimizer', () => {
-  let service: RouteOptimizer;
+describe('RouteOptimizerService', () => {
+  let service: RouteOptimizerService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
-    service = TestBed.inject(RouteOptimizer);
+    service = TestBed.inject(RouteOptimizerService);
   });
 
   it('should be created', () => {
