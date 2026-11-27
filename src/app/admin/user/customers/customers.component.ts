@@ -6,7 +6,7 @@ import { CustomerService } from '@services/customers';
 import { PriceTierService } from '@services/price-tiers';
 import { CompanyContextService } from '@services/company-context';
 import { CustomerMovementsService } from '@services/customer-movements';
-import { MapComponent, MapMarker } from '@components/map/map';
+import { CustomerFormModal, CustomerModalData } from '@components/customer-form-modal/customer-form-modal';
 import { PriceTierInterface } from '@interfaces/price-tier';
 import { CustomerInterface } from '@interfaces/customer';
 import { CustomerMovementInterface } from '@interfaces/customer-movement';
@@ -28,7 +28,7 @@ export interface CustomerViewItem {
 @Component({
   selector: 'app-customers',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MapComponent],
+  imports: [CommonModule, FormsModule, RouterLink, CustomerFormModal],
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.scss'
 })
@@ -48,19 +48,9 @@ export class CustomersComponent implements OnInit {
 
   readonly searchQuery = signal<string>('');
 
-  // Modal Alta / Edición de Cliente
+  // Modal Alta / Edición de Cliente (Componente Reutilizable)
   readonly showQuickCustomerModal = signal<boolean>(false);
-  readonly editingCustomerId = signal<string | null>(null);
-  readonly isSaving = signal<boolean>(false);
-  readonly modalErrorMessage = signal<string | null>(null);
-  readonly newCustomerName = signal<string>('');
-  readonly newCustomerAddress = signal<string>('');
-  readonly newCustomerPhone = signal<string>('');
-  readonly newCustomerTier = signal<CustomerTierCode>('C');
-  readonly newCustomerHasCredit = signal<boolean>(false);
-  readonly newCustomerLat = signal<number | null>(null);
-  readonly newCustomerLng = signal<number | null>(null);
-  readonly isLocating = signal<boolean>(false);
+  readonly selectedCustomerForModal = signal<CustomerModalData | null>(null);
 
   // Modal Cuenta Corriente / Extracto y Cobranzas
   readonly showStatementModal = signal<boolean>(false);
@@ -99,42 +89,6 @@ export class CustomersComponent implements OnInit {
       tierB: list.filter((c) => c.tier === 'B').length,
       tierC: list.filter((c) => c.tier === 'C').length
     };
-  });
-
-  // Centro reactivo para el mapa de geolocalización de cliente
-  readonly customerMapCenter = computed<[number, number]>(() => {
-    const lat = this.newCustomerLat();
-    const lng = this.newCustomerLng();
-    if (lat != null && lng != null) {
-      return [lng, lat];
-    }
-    // Si no tiene ubicación aún, buscar si algún cliente cargado tiene GPS para centrar en la zona
-    const firstWithGps = this.customers().find((c) => c.lat != null && c.lng != null);
-    if (firstWithGps && firstWithGps.lng && firstWithGps.lat) {
-      return [firstWithGps.lng, firstWithGps.lat];
-    }
-    // Default: Córdoba, Argentina
-    return [-64.1888, -31.4201];
-  });
-
-  // Pin reactivo en el mapa
-  readonly customerMapMarkers = computed<MapMarker[]>(() => {
-    const lat = this.newCustomerLat();
-    const lng = this.newCustomerLng();
-    if (lat == null || lng == null) return [];
-
-    const name = this.newCustomerName().trim() || 'Ubicación seleccionada';
-    return [
-      {
-        id: 'customer-pin',
-        lng,
-        lat,
-        title: name,
-        color: '#ef4444',
-        draggable: true,
-        popupHtml: `<strong>${name}</strong><br><span class="text-muted small">Arrastrá el pin para ajustar la entrada</span>`
-      }
-    ];
   });
 
   constructor() {
@@ -244,173 +198,35 @@ export class CustomersComponent implements OnInit {
     return `https://www.google.com/maps/search/?api=1&query=${cleanAddress}`;
   }
 
-  public getCurrentLocation(): void {
-    if (!navigator.geolocation) {
-      this.modalErrorMessage.set('La geolocalización no está soportada por este dispositivo.');
-      return;
-    }
-
-    this.isLocating.set(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        this.isLocating.set(false);
-        this.newCustomerLat.set(Number(position.coords.latitude.toFixed(6)));
-        this.newCustomerLng.set(Number(position.coords.longitude.toFixed(6)));
-      },
-      (error) => {
-        this.isLocating.set(false);
-        let errorMsg = 'No se pudo obtener la ubicación GPS.';
-        if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = 'Permiso denegado para acceder a la ubicación. Habilitalo en el navegador.';
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          errorMsg = 'La señal de GPS no está disponible en este momento.';
-        } else if (error.code === error.TIMEOUT) {
-          errorMsg = 'Se agotó el tiempo de espera para obtener la ubicación GPS.';
-        }
-        this.modalErrorMessage.set(errorMsg);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
-    );
-  }
-
-  public onMapPointSelected(coords: { lng: number; lat: number }): void {
-    this.newCustomerLat.set(Number(coords.lat.toFixed(6)));
-    this.newCustomerLng.set(Number(coords.lng.toFixed(6)));
-  }
-
-  public clearCustomerGps(): void {
-    this.newCustomerLat.set(null);
-    this.newCustomerLng.set(null);
-  }
-
   public openQuickCustomerModal(): void {
-    this.editingCustomerId.set(null);
-    this.newCustomerName.set('');
-    this.newCustomerAddress.set('');
-    this.newCustomerPhone.set('');
-    this.newCustomerTier.set('C');
-    this.newCustomerHasCredit.set(false);
-    this.newCustomerLat.set(null);
-    this.newCustomerLng.set(null);
-    this.modalErrorMessage.set(null);
-    this.isSaving.set(false);
-    this.isLocating.set(false);
+    this.selectedCustomerForModal.set(null);
     this.showQuickCustomerModal.set(true);
   }
 
   public openEditCustomerModal(customer: CustomerViewItem): void {
-    this.editingCustomerId.set(customer.id);
-    this.newCustomerName.set(customer.name);
-    this.newCustomerAddress.set(customer.address);
-    this.newCustomerPhone.set(customer.phone);
-    this.newCustomerTier.set(customer.tier);
-    this.newCustomerHasCredit.set(Boolean(customer.hasCredit));
-    this.newCustomerLat.set(customer.lat ?? null);
-    this.newCustomerLng.set(customer.lng ?? null);
-    this.modalErrorMessage.set(null);
-    this.isSaving.set(false);
-    this.isLocating.set(false);
+    this.selectedCustomerForModal.set({
+      id: customer.id,
+      name: customer.name,
+      address: customer.address,
+      phone: customer.phone,
+      tier: customer.tier,
+      hasCredit: customer.hasCredit,
+      lat: customer.lat,
+      lng: customer.lng
+    });
     this.showQuickCustomerModal.set(true);
   }
 
-  public closeQuickCustomerModal(): void {
-    if (this.isSaving()) return;
+  public onCustomerModalClosed(): void {
     this.showQuickCustomerModal.set(false);
-    this.editingCustomerId.set(null);
-    this.newCustomerLat.set(null);
-    this.newCustomerLng.set(null);
-    this.newCustomerHasCredit.set(false);
-    this.modalErrorMessage.set(null);
-    this.isSaving.set(false);
-    this.isLocating.set(false);
+    this.selectedCustomerForModal.set(null);
   }
 
-  public saveQuickCustomer(): void {
-    const name = this.newCustomerName().trim();
-    const address = this.newCustomerAddress().trim();
-
-    if (!name) {
-      this.modalErrorMessage.set('El nombre o razón social del cliente es obligatorio.');
-      return;
-    }
-
-    if (!address) {
-      this.modalErrorMessage.set('La dirección del cliente es obligatoria.');
-      return;
-    }
-
-    const cmp_uuid = this._companyContext.activeCompany()?.cmp_uuid;
-    if (!cmp_uuid) {
-      this.modalErrorMessage.set('No hay una empresa activa seleccionada para registrar clientes.');
-      return;
-    }
-
-    this.isSaving.set(true);
-    this.modalErrorMessage.set(null);
-
-    const selectedTierCode = this.newCustomerTier();
-    const matchingTier = this.priceTiers().find(
-      (t) => t.prct_code?.toUpperCase() === selectedTierCode
-    );
-    const prct_uuid = matchingTier?.prct_uuid;
-
-    const payload: Partial<CustomerInterface> = {
-      cmp_uuid,
-      prct_uuid,
-      cus_name: name.toUpperCase(),
-      cus_address: address,
-      cus_phone: this.newCustomerPhone().trim(),
-      cus_lat: this.newCustomerLat(),
-      cus_lng: this.newCustomerLng(),
-      cus_hascredit: this.newCustomerHasCredit(),
-      cus_active: true
-    };
-
-    const editingId = this.editingCustomerId();
-
-    if (editingId) {
-      // Actualización en PostgreSQL
-      this._customerService.updateCustomer(cmp_uuid, editingId, payload).subscribe({
-        next: () => {
-          this.isSaving.set(false);
-          this.closeQuickCustomerModal();
-          this.successMessage.set(`Cliente "${name.toUpperCase()}" actualizado con éxito.`);
-          this.loadCustomers();
-        },
-        error: (err) => {
-          this.isSaving.set(false);
-          console.error('Error al actualizar cliente en backend:', err);
-          const errorMsg =
-            err.error?.error ||
-            err.error?.message ||
-            'No se pudo actualizar el cliente en el servidor.';
-          this.modalErrorMessage.set(errorMsg);
-        }
-      });
-    } else {
-      // Alta en PostgreSQL
-      this._customerService.saveCustomer(payload).subscribe({
-        next: () => {
-          this.isSaving.set(false);
-          this.closeQuickCustomerModal();
-          this.successMessage.set(`Cliente "${name.toUpperCase()}" registrado con éxito.`);
-          this.loadCustomers();
-        },
-        error: (err) => {
-          this.isSaving.set(false);
-          console.error('Error al persistir cliente en backend:', err);
-          const errorMsg =
-            err.error?.error ||
-            err.error?.message ||
-            'No se pudo registrar el cliente en el servidor.';
-          this.modalErrorMessage.set(errorMsg);
-        }
-      });
-    }
+  public onCustomerModalSaved(customer: CustomerInterface): void {
+    this.showQuickCustomerModal.set(false);
+    this.selectedCustomerForModal.set(null);
+    this.successMessage.set(`Cliente "${customer.cus_name}" guardado correctamente.`);
+    this.loadCustomers();
   }
 
   public openStatementModal(customer: CustomerViewItem): void {
