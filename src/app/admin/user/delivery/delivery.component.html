@@ -159,37 +159,91 @@
         }
       </div>
 
-      <!-- Selector de Vista: Lista / Mapa / Ambos -->
-      <div class="btn-group btn-group-sm shadow-sm" role="group" aria-label="Modo de vista">
-        <button
-          type="button"
-          class="btn"
-          [ngClass]="activeDeliveryView() === 'LIST' ? 'btn-primary' : 'btn-outline-secondary'"
-          (click)="setDeliveryView('LIST')"
-          title="Ver solo lista"
-        >
-          <i class="bi bi-list-task me-1"></i>Lista
-        </button>
-        <button
-          type="button"
-          class="btn"
-          [ngClass]="activeDeliveryView() === 'SPLIT' ? 'btn-primary' : 'btn-outline-secondary'"
-          (click)="setDeliveryView('SPLIT')"
-          title="Ver lista y mapa"
-        >
-          <i class="bi bi-layout-split me-1"></i>Ambos
-        </button>
-        <button
-          type="button"
-          class="btn"
-          [ngClass]="activeDeliveryView() === 'MAP' ? 'btn-primary' : 'btn-outline-secondary'"
-          (click)="setDeliveryView('MAP')"
-          title="Ver solo mapa"
-        >
-          <i class="bi bi-map me-1"></i>Mapa
-        </button>
+      <div class="d-flex align-items-center gap-2">
+        <!-- Botón de Optimización Inteligente de Ruta (TSP) -->
+        @if (!isRouteOptimized()) {
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-success shadow-sm d-inline-flex align-items-center gap-1"
+            [disabled]="pendingDeliveries().length <= 1"
+            (click)="optimizeDeliveryRoute()"
+            title="Ordenar paradas inteligentemente para minimizar distancia y combustible"
+          >
+            <i class="bi bi-lightning-charge-fill text-warning"></i>
+            <span class="fw-semibold">Optimizar Ruta</span>
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary shadow-sm d-inline-flex align-items-center gap-1"
+            (click)="restoreOriginalRoute()"
+            title="Restaurar el orden original de carga"
+          >
+            <i class="bi bi-arrow-counterclockwise"></i>
+            <span class="fw-semibold">Restaurar Orden</span>
+          </button>
+        }
+
+        <!-- Selector de Vista: Lista / Mapa / Ambos -->
+        <div class="btn-group btn-group-sm shadow-sm" role="group" aria-label="Modo de vista">
+          <button
+            type="button"
+            class="btn"
+            [ngClass]="activeDeliveryView() === 'LIST' ? 'btn-primary' : 'btn-outline-secondary'"
+            (click)="setDeliveryView('LIST')"
+            title="Ver solo lista"
+          >
+            <i class="bi bi-list-task me-1"></i>Lista
+          </button>
+          <button
+            type="button"
+            class="btn"
+            [ngClass]="activeDeliveryView() === 'SPLIT' ? 'btn-primary' : 'btn-outline-secondary'"
+            (click)="setDeliveryView('SPLIT')"
+            title="Ver lista y mapa"
+          >
+            <i class="bi bi-layout-split me-1"></i>Ambos
+          </button>
+          <button
+            type="button"
+            class="btn"
+            [ngClass]="activeDeliveryView() === 'MAP' ? 'btn-primary' : 'btn-outline-secondary'"
+            (click)="setDeliveryView('MAP')"
+            title="Ver solo mapa"
+          >
+            <i class="bi bi-map me-1"></i>Mapa
+          </button>
+        </div>
       </div>
     </div>
+
+    @if (isRouteOptimized() && routeOptimizationStats(); as stats) {
+      <div class="alert alert-success py-2 px-3 small mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2 shadow-sm border-success-subtle">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-lightning-charge-fill text-warning fs-5"></i>
+          <div>
+            <strong class="d-block text-success">¡Ruta optimizada con éxito!</strong>
+            <span class="text-secondary" style="font-size: 0.78rem;">
+              Recorrido ajustado de <strong>{{ stats.distanceBeforeKm }} km</strong> a <strong>{{ stats.distanceAfterKm }} km</strong>
+              @if (stats.savedKm > 0) {
+                (ahorro estimado de <strong>{{ stats.savedKm }} km</strong> / {{ stats.savedPercentage }}%)
+              }
+              @if (stats.unroutedStopsCount > 0) {
+                • <span class="text-warning fw-semibold">{{ stats.unroutedStopsCount }} parada(s) sin GPS ordenadas al final</span>
+              }
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm btn-light border py-1 px-2 text-secondary"
+          style="font-size: 0.75rem;"
+          (click)="restoreOriginalRoute()"
+        >
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Deshacer
+        </button>
+      </div>
+    }
 
     @if (successMessage(); as success) {
       <div

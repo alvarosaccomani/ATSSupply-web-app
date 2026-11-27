@@ -8,6 +8,7 @@ import { StockMovementsService } from '@services/stock-movements';
 import { CompanySettingsService } from '@services/company-settings';
 import { UserRolesCompanyService } from '@services/user-roles-company';
 import { AuthService } from '@services/auth';
+import { RouteOptimizerService, RouteOptimizationResult } from '@services/route-optimizer';
 import { MapComponent, MapMarker } from '@components/map/map';
 import { OrderInterface, OrderStatus } from '@interfaces/order';
 
@@ -54,12 +55,18 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   private readonly _companySettingsService = inject(CompanySettingsService);
   private readonly _userRolesCompanyService = inject(UserRolesCompanyService);
   private readonly _authService = inject(AuthService);
+  private readonly _routeOptimizer = inject(RouteOptimizerService);
 
   // Modo de visualización: 'LIST' (solo lista), 'MAP' (solo mapa), 'SPLIT' (lista y mapa en pantalla)
   readonly activeDeliveryView = signal<'LIST' | 'MAP' | 'SPLIT'>('SPLIT');
 
   // Parada seleccionada/enfocada
   readonly selectedOrderForMap = signal<string | null>(null);
+
+  // Optimización inteligente de ruta (TSP)
+  readonly isRouteOptimized = signal<boolean>(false);
+  readonly routeOptimizationStats = signal<RouteOptimizationResult<DeliveryOrderItem> | null>(null);
+  private _originalOrdersBackup: DeliveryOrderItem[] = [];
 
   // Estados de carga y feedback
   readonly isLoading = signal<boolean>(false);
@@ -399,6 +406,9 @@ export class DeliveryComponent implements OnInit, OnDestroy {
           });
 
           this.orders.set(mappedOrders);
+          this.isRouteOptimized.set(false);
+          this.routeOptimizationStats.set(null);
+          this._originalOrdersBackup = [];
           this.loadDrivers(cmp_uuid);
         }
       },
@@ -698,6 +708,58 @@ export class DeliveryComponent implements OnInit, OnDestroy {
 
   public onMapMarkerClick(marker: MapMarker): void {
     this.selectedOrderForMap.set(String(marker.id));
+  }
+
+  /**
+   * Ordena inteligentemente las paradas pendientes para minimizar distancia y tiempo de recorrido (TSP).
+   */
+  public optimizeDeliveryRoute(): void {
+    const activeComp = this._companyContext.activeCompany();
+    const currentOrders = this.orders();
+
+    if (currentOrders.length <= 1) {
+      return;
+    }
+
+    // Respaldar orden original de carga si no fue respaldado previamente
+    if (!this.isRouteOptimized()) {
+      this._originalOrdersBackup = [...currentOrders];
+    }
+
+    // Origen: Base de la empresa si tiene lat/lng, o null para comenzar desde la parada más conveniente
+    const origin =
+      activeComp?.cmp_lat != null && activeComp?.cmp_lng != null
+        ? { lat: Number(activeComp.cmp_lat), lng: Number(activeComp.cmp_lng) }
+        : null;
+
+    // Solo optimizamos las paradas aún pendientes de entrega
+    const pending = currentOrders.filter(
+      (o) => o.status === 'PENDIENTE DE ENTREGA'
+    );
+    const completed = currentOrders.filter(
+      (o) => o.status !== 'PENDIENTE DE ENTREGA'
+    );
+
+    const result = this._routeOptimizer.optimizeRoute(origin, pending);
+
+    this.orders.set([...result.orderedStops, ...completed]);
+    this.isRouteOptimized.set(true);
+    this.routeOptimizationStats.set(result);
+
+    setTimeout(() => this.mapComponent?.resize(), 100);
+  }
+
+  /**
+   * Restaura la lista de pedidos al orden original de carga.
+   */
+  public restoreOriginalRoute(): void {
+    if (this._originalOrdersBackup.length > 0) {
+      this.orders.set([...this._originalOrdersBackup]);
+      this._originalOrdersBackup = [];
+    }
+    this.isRouteOptimized.set(false);
+    this.routeOptimizationStats.set(null);
+    setTimeout(() => this.mapComponent?.resize(), 100);
   }
 
   private _mapToDeliveryStatus(backendStatus: OrderStatus): DeliveryStatus {
