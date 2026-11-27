@@ -10,6 +10,9 @@ import { ProductionOrderService } from '@services/production-orders';
 import { MachineService } from '@services/machines';
 import { MenusService } from '@services/menus';
 import { CompanyMenusService } from '@services/company-menus';
+import { CustomerService } from '@services/customers';
+import { CustomerInterface } from '@interfaces/customer';
+import { MapComponent, MapMarker, HeatPoint } from '@components/map/map';
 import { OrderInterface, OrderStatus as BackendOrderStatus } from '@interfaces/order';
 import { ProductionOrderInterface } from '@interfaces/production-order';
 import { MachineInterface } from '@interfaces/machine';
@@ -57,7 +60,7 @@ export interface DashboardShortcutItem {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, MapComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
 })
@@ -69,6 +72,7 @@ export class DashboardComponent implements OnInit {
   private readonly _machineService = inject(MachineService);
   private readonly _menusService = inject(MenusService);
   private readonly _companyMenusService = inject(CompanyMenusService);
+  private readonly _customerService = inject(CustomerService);
 
   readonly showProduction = this._companyContext.canProduce;
   readonly showSales = this._companyContext.hasSales;
@@ -103,6 +107,153 @@ export class DashboardComponent implements OnInit {
 
   // Lotes recientes de Producción
   readonly productionLogs = signal<DashboardProductionLog[]>([]);
+
+  // Inteligencia Comercial y Mapa de Calor (Owner)
+  readonly rawCustomers = signal<CustomerInterface[]>([]);
+  readonly rawOrders = signal<OrderInterface[]>([]);
+  readonly activeCommercialMapView = signal<'HEATMAP' | 'COLD_ZONES' | 'ALL_CUSTOMERS'>('HEATMAP');
+
+  // Centro del mapa según coordenadas de la empresa o clientes
+  readonly commercialMapCenter = computed<[number, number]>(() => {
+    const comp = this._companyContext.activeCompany();
+    if (comp?.cmp_lng != null && comp?.cmp_lat != null) {
+      return [Number(comp.cmp_lng), Number(comp.cmp_lat)];
+    }
+    const firstGeo = this.rawCustomers().find((c) => c.cus_lat != null && c.cus_lng != null);
+    if (firstGeo?.cus_lng != null && firstGeo?.cus_lat != null) {
+      return [Number(firstGeo.cus_lng), Number(firstGeo.cus_lat)];
+    }
+    return [-64.1888, -31.4201];
+  });
+
+  // Métricas geocomerciales
+  readonly totalCustomersCount = computed<number>(() => this.rawCustomers().length);
+  readonly geocodedCustomersCount = computed<number>(() =>
+    this.rawCustomers().filter((c) => c.cus_lat != null && c.cus_lng != null).length
+  );
+  readonly coveragePercentage = computed<number>(() => {
+    const total = this.totalCustomersCount();
+    if (total === 0) return 0;
+    return Math.round((this.geocodedCustomersCount() / total) * 100);
+  });
+
+  // Mapa de facturación acumulada por cliente
+  readonly customerSalesMap = computed<Map<string, number>>(() => {
+    const map = new Map<string, number>();
+    const ords = this.rawOrders();
+    ords.forEach((ord: any) => {
+      const cId = ord.cus_uuid || ord.customer?.cus_uuid;
+      if (cId) {
+        const current = map.get(cId) || 0;
+        const total = Number(ord.ord_totalamount) || Number(ord.ord_total) || 0;
+        map.set(cId, current + total);
+      }
+    });
+    return map;
+  });
+
+  // Puntos para la capa de calor de ventas (Heatmap)
+  readonly commercialHeatPoints = computed<HeatPoint[]>(() => {
+    const customers = this.rawCustomers();
+    const salesMap = this.customerSalesMap();
+
+    return customers
+      .filter((c) => c.cus_lat != null && c.cus_lng != null)
+      .map((c) => {
+        const totalPurchased = salesMap.get(c.cus_uuid) || 0;
+        return {
+          lng: Number(c.cus_lng),
+          lat: Number(c.cus_lat),
+          weight: totalPurchased > 0 ? totalPurchased : 100,
+          title: `${c.cus_name} (${this.formatMoney(totalPurchased)})`
+        };
+      });
+  });
+
+  // Clientes en "Zona Fría" (geolocalizados pero sin compras para mandar preventistas)
+  readonly coldZoneCustomers = computed<CustomerInterface[]>(() => {
+    const customers = this.rawCustomers();
+    const salesMap = this.customerSalesMap();
+
+    return customers
+      .filter((c) => c.cus_lat != null && c.cus_lng != null)
+      .filter((c) => (salesMap.get(c.cus_uuid) || 0) === 0);
+  });
+
+  // Marcadores de paradas o clientes según la vista activa
+  readonly commercialMarkers = computed<MapMarker[]>(() => {
+    const view = this.activeCommercialMapView();
+    const salesMap = this.customerSalesMap();
+    const customers = this.rawCustomers().filter((c) => c.cus_lat != null && c.cus_lng != null);
+
+    if (view === 'HEATMAP') {
+      return customers.map((c) => {
+        const sales = salesMap.get(c.cus_uuid) || 0;
+        return {
+          id: c.cus_uuid,
+          lng: Number(c.cus_lng),
+          lat: Number(c.cus_lat),
+          color: '#ef4444',
+          label: '🔥',
+          title: c.cus_name,
+          popupHtml: `
+            <div class="p-1">
+              <span class="badge bg-danger mb-1">🔥 Cliente Activo</span>
+              <strong class="d-block text-dark">${c.cus_name}</strong>
+              <small class="text-muted d-block">${c.cus_address || 'Sin dirección'}</small>
+              <div class="fw-bold text-success mt-1">Facturación: ${this.formatMoney(sales)}</div>
+            </div>
+          `
+        };
+      });
+    }
+
+    if (view === 'COLD_ZONES') {
+      return this.coldZoneCustomers().map((c) => ({
+        id: c.cus_uuid,
+        lng: Number(c.cus_lng),
+        lat: Number(c.cus_lat),
+        color: '#3b82f6',
+        label: '❄',
+        title: c.cus_name,
+        popupHtml: `
+          <div class="p-1">
+            <span class="badge bg-primary-subtle text-primary mb-1">Zona Fría / Preventa</span>
+            <strong class="d-block text-dark">${c.cus_name}</strong>
+            <small class="text-muted d-block">${c.cus_address || 'Sin dirección'}</small>
+            <div class="small text-danger fw-semibold mt-1">Sin compras registradas</div>
+            ${c.cus_phone ? `<div class="small mt-1"><i class="bi bi-telephone"></i> ${c.cus_phone}</div>` : ''}
+          </div>
+        `
+      }));
+    }
+
+    return customers.map((c) => {
+      const sales = salesMap.get(c.cus_uuid) || 0;
+      const isCold = sales === 0;
+      return {
+        id: c.cus_uuid,
+        lng: Number(c.cus_lng),
+        lat: Number(c.cus_lat),
+        color: isCold ? '#3b82f6' : '#10b981',
+        label: isCold ? '❄' : '✓',
+        title: c.cus_name,
+        popupHtml: `
+          <div class="p-1">
+            <strong class="d-block text-dark">${c.cus_name}</strong>
+            <small class="text-muted d-block">${c.cus_address || 'Sin dirección'}</small>
+            <div class="small fw-bold mt-1 ${isCold ? 'text-secondary' : 'text-success'}">
+              ${isCold ? 'Sin compras' : 'Total: ' + this.formatMoney(sales)}
+            </div>
+          </div>
+        `
+      };
+    });
+  });
+
+  public setCommercialMapView(view: 'HEATMAP' | 'COLD_ZONES' | 'ALL_CUSTOMERS'): void {
+    this.activeCommercialMapView.set(view);
+  }
 
   // Menús y Overrides para Atajos de Dashboard
   private rawMenuTree = signal<MenuItemTree[]>([]);
@@ -306,6 +457,7 @@ export class DashboardComponent implements OnInit {
           });
 
           this.orders.set(mappedOrders);
+          this.rawOrders.set(res.data);
         }
       },
       error: (err) => {
@@ -313,6 +465,16 @@ export class DashboardComponent implements OnInit {
         this.errorMessage.set('No se pudieron consultar los pedidos de la jornada.');
         console.warn('Error al cargar pedidos para dashboard:', err);
       }
+    });
+
+    // Cargar Clientes para Inteligencia Comercial y Mapa de Calor
+    this._customerService.getCustomers(cmp_uuid).subscribe({
+      next: (res) => {
+        if (res?.data && Array.isArray(res.data)) {
+          this.rawCustomers.set(res.data);
+        }
+      },
+      error: (err) => console.warn('Error al cargar clientes para heatmap:', err)
     });
 
     // Cargar Lotes de Producción si la empresa tiene producción activa

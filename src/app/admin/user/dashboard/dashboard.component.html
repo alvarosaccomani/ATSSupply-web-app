@@ -114,6 +114,142 @@
   </div>
 }
 
+<!-- MAPA DE CALOR COMERCIAL Y ZONAS FRÍAS (DECISIONES DEL DUEÑO) -->
+@if (role() === 'OWNER' && showSales()) {
+  <div class="ats-card p-3 p-lg-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div>
+        <h6 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+          <i class="bi bi-fire text-danger fs-5"></i>
+          <span>MAPA DE CALOR COMERCIAL & ZONAS FRÍAS</span>
+        </h6>
+        <small class="text-muted" style="font-size: 0.75rem;">
+          Concentración de facturación por zona y detección de clientes inactivos para preventistas.
+        </small>
+      </div>
+
+      <!-- Selector de Capas del Mapa -->
+      <div class="btn-group btn-group-sm shadow-sm" role="group" aria-label="Capa de mapa">
+        <button
+          type="button"
+          class="btn"
+          [ngClass]="activeCommercialMapView() === 'HEATMAP' ? 'btn-danger text-white' : 'btn-outline-secondary'"
+          (click)="setCommercialMapView('HEATMAP')"
+          title="Ver concentración de ventas en mapa de calor"
+        >
+          <i class="bi bi-fire me-1"></i>Calor ($)
+        </button>
+        <button
+          type="button"
+          class="btn"
+          [ngClass]="activeCommercialMapView() === 'COLD_ZONES' ? 'btn-primary' : 'btn-outline-secondary'"
+          (click)="setCommercialMapView('COLD_ZONES')"
+          title="Ver clientes sin compras para enviar preventistas"
+        >
+          <i class="bi bi-snow me-1"></i>Zonas Frías ({{ coldZoneCustomers().length }})
+        </button>
+        <button
+          type="button"
+          class="btn"
+          [ngClass]="activeCommercialMapView() === 'ALL_CUSTOMERS' ? 'btn-success' : 'btn-outline-secondary'"
+          (click)="setCommercialMapView('ALL_CUSTOMERS')"
+          title="Ver todos los clientes geolocalizados"
+        >
+          <i class="bi bi-people me-1"></i>Todos ({{ geocodedCustomersCount() }})
+        </button>
+      </div>
+    </div>
+
+    <!-- Indicadores Rápidos de Cobertura Geográfica -->
+    <div class="row g-2 mb-3 text-center small">
+      <div class="col-4">
+        <div class="p-2 bg-light rounded-3 border">
+          <span class="text-muted d-block" style="font-size: 0.7rem;">COBERTURA GPS</span>
+          <strong class="text-dark fs-6">{{ coveragePercentage() }}%</strong>
+          <span class="text-muted ms-1" style="font-size: 0.68rem;">({{ geocodedCustomersCount() }}/{{ totalCustomersCount() }})</span>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="p-2 bg-light rounded-3 border">
+          <span class="text-muted d-block" style="font-size: 0.7rem;">CLIENTES EN ZONA FRÍA</span>
+          <strong class="text-primary fs-6">{{ coldZoneCustomers().length }}</strong>
+          <span class="text-muted ms-1" style="font-size: 0.68rem;">a reactivar</span>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="p-2 bg-light rounded-3 border">
+          <span class="text-muted d-block" style="font-size: 0.7rem;">PUNTOS TÉRMICOS</span>
+          <strong class="text-danger fs-6">{{ commercialHeatPoints().length }}</strong>
+          <span class="text-muted ms-1" style="font-size: 0.68rem;">geolocalizados</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenedor del Mapa MapLibre GL -->
+    <div class="row g-3">
+      <div class="col-12" [class.col-lg-8]="activeCommercialMapView() === 'COLD_ZONES'">
+        <div class="rounded-3 overflow-hidden border shadow-sm" style="height: 380px; width: 100%; position: relative;">
+          <app-map
+            [markers]="commercialMarkers()"
+            [heatPoints]="commercialHeatPoints()"
+            [enableHeatmap]="activeCommercialMapView() === 'HEATMAP'"
+            [center]="commercialMapCenter()"
+            [zoom]="12"
+          ></app-map>
+        </div>
+      </div>
+
+      <!-- Panel Lateral de Zonas Frías / Clientes a Visitar (Visible en modo Zonas Frías) -->
+      @if (activeCommercialMapView() === 'COLD_ZONES') {
+        <div class="col-12 col-lg-4">
+          <div class="border rounded-3 p-3 bg-light h-100 d-flex flex-column" style="max-height: 380px; overflow-y: auto;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="small fw-bold text-primary">
+                <i class="bi bi-person-x-fill me-1"></i>Oportunidades de Preventa
+              </span>
+              <span class="badge bg-primary text-white" style="font-size: 0.65rem;">{{ coldZoneCustomers().length }} detectados</span>
+            </div>
+            @if (coldZoneCustomers().length === 0) {
+              <div class="p-4 text-center text-muted small my-auto">
+                <i class="bi bi-patch-check-fill text-success fs-2 d-block mb-2"></i>
+                <strong class="text-dark d-block">¡Excelente cobertura activa!</strong>
+                <span class="text-secondary" style="font-size: 0.75rem;">
+                  Todos los clientes geolocalizados registran pedidos. No hay zonas frías desatendidas.
+                </span>
+              </div>
+            } @else {
+              <p class="text-muted small mb-2" style="font-size: 0.72rem;">
+                Clientes registrados sin compras recientes en su zona:
+              </p>
+              <div class="d-flex flex-column gap-2">
+                @for (c of coldZoneCustomers(); track c.cus_uuid) {
+                  <div class="p-2 bg-white rounded-2 border shadow-none small">
+                    <div class="d-flex justify-content-between align-items-start">
+                      <strong class="text-dark">{{ c.cus_name }}</strong>
+                      @if (c.cus_phone) {
+                        <a
+                          [href]="'https://wa.me/' + c.cus_phone"
+                          target="_blank"
+                          class="btn btn-sm btn-outline-success py-0 px-1"
+                          style="font-size: 0.68rem;"
+                          title="Contactar por WhatsApp"
+                        >
+                          <i class="bi bi-whatsapp"></i>
+                        </a>
+                      }
+                    </div>
+                    <small class="text-muted d-block text-truncate">{{ c.cus_address || 'Sin dirección' }}</small>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+}
+
 <!-- Distribución a Dos Columnas: Pedidos del Día y Últimos Lotes de Producción -->
 <div class="row g-4">
   <!-- Pedidos del Día -->
