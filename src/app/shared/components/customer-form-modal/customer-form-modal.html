@@ -41,9 +41,17 @@
           </div>
 
           <div class="mb-3">
-            <label for="modalCusAddress" class="form-label small fw-semibold">
-              Dirección <span class="text-danger">*</span>
-            </label>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label for="modalCusAddress" class="form-label small fw-semibold mb-0">
+                Dirección <span class="text-danger">*</span>
+              </label>
+              @if (isResolvingAddress()) {
+                <span class="text-primary small fw-normal d-inline-flex align-items-center" style="font-size: 0.72rem;">
+                  <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                  Obteniendo calle y altura...
+                </span>
+              }
+            </div>
             <input
               type="text"
               id="modalCusAddress"

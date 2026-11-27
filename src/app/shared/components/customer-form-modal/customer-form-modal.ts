@@ -13,6 +13,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CustomerService } from '@services/customers';
 import { CompanyContextService } from '@services/company-context';
+import { GeocodingService } from '@services/geocoding';
 import { CustomerInterface } from '@interfaces/customer';
 import { PriceTierInterface } from '@interfaces/price-tier';
 import { MapComponent, MapMarker } from '@components/map/map';
@@ -48,6 +49,7 @@ export interface CustomerModalData {
 export class CustomerFormModal implements OnChanges {
   private readonly _customerService = inject(CustomerService);
   private readonly _companyContext = inject(CompanyContextService);
+  private readonly _geocodingService = inject(GeocodingService);
 
   @Input() isOpen = false;
   @Input() customer: CustomerModalData | null = null;
@@ -63,6 +65,7 @@ export class CustomerFormModal implements OnChanges {
   readonly isEditing = computed<boolean>(() => Boolean(this.customer?.id || this.customer?.cus_uuid));
   readonly isSaving = signal<boolean>(false);
   readonly isLocating = signal<boolean>(false);
+  readonly isResolvingAddress = signal<boolean>(false);
   readonly errorMessage = signal<string | null>(null);
 
   // Campos reactivos
@@ -118,6 +121,7 @@ export class CustomerFormModal implements OnChanges {
     this.errorMessage.set(null);
     this.isSaving.set(false);
     this.isLocating.set(false);
+    this.isResolvingAddress.set(false);
 
     if (this.customer) {
       this.name.set(this.customer.name || this.customer.cus_name || '');
@@ -138,9 +142,12 @@ export class CustomerFormModal implements OnChanges {
     }
   }
 
-  public onMapPointSelected(coords: { lng: number; lat: number }): void {
-    this.lat.set(Number(coords.lat.toFixed(6)));
-    this.lng.set(Number(coords.lng.toFixed(6)));
+  public async onMapPointSelected(coords: { lng: number; lat: number }): Promise<void> {
+    const lat = Number(coords.lat.toFixed(6));
+    const lng = Number(coords.lng.toFixed(6));
+    this.lat.set(lat);
+    this.lng.set(lng);
+    await this._resolveAddressFromCoords(lat, lng);
   }
 
   public clearGps(): void {
@@ -156,10 +163,13 @@ export class CustomerFormModal implements OnChanges {
 
     this.isLocating.set(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         this.isLocating.set(false);
-        this.lat.set(Number(pos.coords.latitude.toFixed(6)));
-        this.lng.set(Number(pos.coords.longitude.toFixed(6)));
+        const lat = Number(pos.coords.latitude.toFixed(6));
+        const lng = Number(pos.coords.longitude.toFixed(6));
+        this.lat.set(lat);
+        this.lng.set(lng);
+        await this._resolveAddressFromCoords(lat, lng);
       },
       (err) => {
         this.isLocating.set(false);
@@ -171,6 +181,18 @@ export class CustomerFormModal implements OnChanges {
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
+  }
+
+  private async _resolveAddressFromCoords(lat: number, lng: number): Promise<void> {
+    this.isResolvingAddress.set(true);
+    try {
+      const resolved = await this._geocodingService.reverseGeocode(lat, lng);
+      if (resolved) {
+        this.address.set(resolved);
+      }
+    } finally {
+      this.isResolvingAddress.set(false);
+    }
   }
 
   public closeModal(): void {
