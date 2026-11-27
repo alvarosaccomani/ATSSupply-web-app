@@ -384,6 +384,95 @@
                 </div>
               </div>
 
+              <!-- SECCIÓN DE UBICACIÓN GEOGRÁFICA / PLANTA O DEPÓSITO -->
+              <div class="col-12 mt-3">
+                <div class="p-3 bg-light rounded-3 border">
+                  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <div>
+                      <label class="form-label small fw-bold mb-0 text-dark">
+                        <i class="bi bi-geo-alt-fill text-danger me-1"></i>Ubicación de Planta / Depósito Base
+                      </label>
+                      <small class="text-muted d-block" style="font-size: 0.72rem;">
+                        Punto de partida para el ruteo inteligente (TSP) y centro del mapa comercial.
+                      </small>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                      @if (formLat() != null && formLng() != null) {
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-outline-danger py-0 px-2 d-inline-flex align-items-center gap-1"
+                          style="font-size: 0.72rem; height: 26px;"
+                          title="Limpiar coordenadas"
+                          (click)="clearCompanyGps()"
+                        >
+                          <i class="bi bi-x-circle"></i>Limpiar pin
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-primary py-0 px-3 d-inline-flex align-items-center gap-1 rounded-pill"
+                        style="height: 26px; font-size: 0.75rem;"
+                        [disabled]="isLocatingCompany() || isSaving()"
+                        (click)="getCurrentLocation()"
+                      >
+                        @if (isLocatingCompany()) {
+                          <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                          <span>Obteniendo GPS...</span>
+                        } @else {
+                          <i class="bi bi-crosshair"></i>Mi GPS actual
+                        }
+                      </button>
+                    </div>
+                  </div>
+
+                  <p class="text-muted small mb-2" style="font-size: 0.75rem;">
+                    <i class="bi bi-hand-index-thumb me-1"></i>Hacé click en el mapa o arrastrá el pin para fijar la planta o depósito de la empresa:
+                  </p>
+
+                  <!-- MAPA INTERACTIVO MAPLIBRE GL -->
+                  <div class="mb-2 rounded-2 overflow-hidden border">
+                    <app-map
+                      [center]="companyMapCenter()"
+                      [zoom]="formLat() ? 15 : 13"
+                      [selectablePoint]="true"
+                      [markers]="companyMapMarkers()"
+                      [autoFit]="false"
+                      height="200px"
+                      (pointSelect)="onMapPointSelected($event)"
+                    ></app-map>
+                  </div>
+
+                  <!-- Coordenadas numéricas -->
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label text-muted mb-1" style="font-size: 0.72rem;">Latitud</label>
+                      <input
+                        type="number"
+                        step="any"
+                        class="form-control form-control-sm"
+                        placeholder="-31.4201"
+                        [ngModel]="formLat()"
+                        (ngModelChange)="formLat.set($event)"
+                        name="formLat"
+                      />
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label text-muted mb-1" style="font-size: 0.72rem;">Longitud</label>
+                      <input
+                        type="number"
+                        step="any"
+                        class="form-control form-control-sm"
+                        placeholder="-64.1888"
+                        [ngModel]="formLng()"
+                        (ngModelChange)="formLng.set($event)"
+                        name="formLng"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div class="col-12">
                 <label class="form-label small fw-semibold">Descripción / Rubro Comercial</label>
                 <textarea

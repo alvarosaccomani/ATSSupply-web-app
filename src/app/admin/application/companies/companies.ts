@@ -2,17 +2,20 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CompaniesService } from '@services/companies';
+import { CompanyContextService } from '@services/company-context';
 import { CompanyInterface } from '@interfaces/company';
+import { MapComponent, MapMarker } from '@components/map/map';
 
 @Component({
   selector: 'app-companies',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MapComponent],
   templateUrl: './companies.html',
   styleUrl: './companies.scss'
 })
 export class Companies implements OnInit {
   private readonly _companiesService = inject(CompaniesService);
+  private readonly _companyContext = inject(CompanyContextService);
 
   // Estados reactivos
   readonly isLoading = signal<boolean>(false);
@@ -33,6 +36,9 @@ export class Companies implements OnInit {
   // Campos del Formulario
   readonly formName = signal<string>('');
   readonly formAddress = signal<string>('');
+  readonly formLat = signal<number | null>(null);
+  readonly formLng = signal<number | null>(null);
+  readonly isLocatingCompany = signal<boolean>(false);
   readonly formPhone = signal<string>('');
   readonly formEmail = signal<string>('');
   readonly formWhatsapp = signal<string>('');
@@ -42,6 +48,35 @@ export class Companies implements OnInit {
 
   // Modal de Confirmación de Baja
   readonly companyToDelete = signal<CompanyInterface | null>(null);
+
+  // Marcadores interactivos para el mapa de la empresa
+  readonly companyMapMarkers = computed<MapMarker[]>(() => {
+    const lat = this.formLat();
+    const lng = this.formLng();
+    if (lat != null && lng != null) {
+      return [
+        {
+          id: 'company-pin',
+          lat,
+          lng,
+          title: this.formName() || 'Depósito / Planta Central',
+          color: '#0f4c81',
+          draggable: true
+        }
+      ];
+    }
+    return [];
+  });
+
+  // Centro dinámico para el mapa de la empresa
+  readonly companyMapCenter = computed<[number, number]>(() => {
+    const lat = this.formLat();
+    const lng = this.formLng();
+    if (lat != null && lng != null) {
+      return [lng, lat];
+    }
+    return [-64.1888, -31.4201];
+  });
 
   // Computed KPIs
   readonly totalCompanies = computed<number>(() => this.companies().length);
@@ -107,6 +142,8 @@ export class Companies implements OnInit {
     this.editingCmpUuid.set(null);
     this.formName.set('');
     this.formAddress.set('');
+    this.formLat.set(null);
+    this.formLng.set(null);
     this.formPhone.set('');
     this.formEmail.set('');
     this.formWhatsapp.set('');
@@ -121,6 +158,8 @@ export class Companies implements OnInit {
     this.editingCmpUuid.set(company.cmp_uuid);
     this.formName.set(company.cmp_name || '');
     this.formAddress.set(company.cmp_address || '');
+    this.formLat.set(company.cmp_lat != null ? Number(company.cmp_lat) : null);
+    this.formLng.set(company.cmp_lng != null ? Number(company.cmp_lng) : null);
     this.formPhone.set(company.cmp_phone || '');
     this.formEmail.set(company.cmp_email || '');
     this.formWhatsapp.set(company.cmp_whatsapp || '');
@@ -128,6 +167,33 @@ export class Companies implements OnInit {
     this.formPrimaryColor.set(company.cmp_primarycolor || '#0f4c81');
     this.formStatus.set(company.cmp_status || 'ACTIVE');
     this.isModalOpen.set(true);
+  }
+
+  public onMapPointSelected(coords: { lng: number; lat: number }): void {
+    this.formLng.set(Number(coords.lng.toFixed(6)));
+    this.formLat.set(Number(coords.lat.toFixed(6)));
+  }
+
+  public getCurrentLocation(): void {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    this.isLocatingCompany.set(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        this.isLocatingCompany.set(false);
+        this.formLat.set(Number(pos.coords.latitude.toFixed(6)));
+        this.formLng.set(Number(pos.coords.longitude.toFixed(6)));
+      },
+      (err) => {
+        this.isLocatingCompany.set(false);
+        console.warn('GPS empresa error:', err);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  public clearCompanyGps(): void {
+    this.formLat.set(null);
+    this.formLng.set(null);
   }
 
   public closeModal(): void {
@@ -148,6 +214,8 @@ export class Companies implements OnInit {
     const payload: Partial<CompanyInterface> = {
       cmp_name: name,
       cmp_address: this.formAddress().trim() || null,
+      cmp_lat: this.formLat(),
+      cmp_lng: this.formLng(),
       cmp_phone: this.formPhone().trim() || null,
       cmp_email: this.formEmail().trim() || null,
       cmp_whatsapp: this.formWhatsapp().trim() || null,
@@ -159,11 +227,22 @@ export class Companies implements OnInit {
     if (this.isEditing() && this.editingCmpUuid()) {
       const cmp_uuid = this.editingCmpUuid()!;
       this._companiesService.updateCompany(cmp_uuid, payload).subscribe({
-        next: () => {
+        next: (res) => {
           this.isSaving.set(false);
           this.isModalOpen.set(false);
           this.successMessage.set(`Empresa ${name} actualizada exitosamente.`);
           this.loadCompanies();
+
+          // Sincronizar contexto si se editó la empresa activa
+          const active = this._companyContext.activeCompany();
+          if (active?.cmp_uuid === cmp_uuid) {
+            this._companyContext.setActiveCompany({
+              ...active,
+              ...payload,
+              ...(res?.data || {})
+            });
+          }
+
           setTimeout(() => this.successMessage.set(null), 3500);
         },
         error: (err) => {
