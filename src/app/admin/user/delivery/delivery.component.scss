@@ -7,6 +7,12 @@
   &:hover {
     box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   }
+
+  &.closest-delivery-card {
+    border-color: #0284c7 !important;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25) !important;
+    background: linear-gradient(135deg, rgba(2, 132, 199, 0.04) 0%, rgba(255, 255, 255, 1) 100%);
+  }
 }
 
 .alert-feedback {

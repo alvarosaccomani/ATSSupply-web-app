@@ -63,6 +63,11 @@ export class DeliveryComponent implements OnInit, OnDestroy {
   // Parada seleccionada/enfocada
   readonly selectedOrderForMap = signal<string | null>(null);
 
+  // Geolocalización del chofer y detección de proximidad GPS
+  readonly driverLocation = signal<{ lat: number; lng: number } | null>(null);
+  readonly isLocatingDriver = signal<boolean>(false);
+  readonly driverGpsError = signal<string | null>(null);
+
   // Optimización inteligente de ruta (TSP)
   readonly isRouteOptimized = signal<boolean>(false);
   readonly routeOptimizationStats = signal<RouteOptimizationResult<DeliveryOrderItem> | null>(null);
@@ -193,10 +198,74 @@ export class DeliveryComponent implements OnInit, OnDestroy {
     this.pendingDeliveries().filter((o) => o.lat == null || o.lng == null)
   );
 
+  // Pedido pendiente más cercano al chofer según su GPS
+  readonly closestPendingDelivery = computed<{
+    order: DeliveryOrderItem;
+    distanceKm: number;
+    distanceFormatted: string;
+  } | null>(() => {
+    const loc = this.driverLocation();
+    if (!loc) return null;
+
+    const pending = this.pendingDeliveries().filter(
+      (o) => o.lat != null && o.lng != null
+    );
+    if (pending.length === 0) return null;
+
+    let closest: DeliveryOrderItem | null = null;
+    let minDistance = Infinity;
+
+    for (const order of pending) {
+      const dist = this._routeOptimizer.haversineDistance(
+        loc.lat,
+        loc.lng,
+        order.lat!,
+        order.lng!
+      );
+      if (dist < minDistance) {
+        minDistance = dist;
+        closest = order;
+      }
+    }
+
+    if (!closest) return null;
+
+    const distanceFormatted =
+      minDistance < 1
+        ? `${Math.round(minDistance * 1000)} metros`
+        : `${minDistance.toFixed(1)} km`;
+
+    return {
+      order: closest,
+      distanceKm: minDistance,
+      distanceFormatted
+    };
+  });
+
   // Marcadores interactivos para el mapa de ruta
   readonly routeMarkers = computed<MapMarker[]>(() => {
     const markers: MapMarker[] = [];
     const selectedId = this.selectedOrderForMap();
+
+    // Marcador del vehículo del chofer en vivo
+    const driverLoc = this.driverLocation();
+    if (driverLoc) {
+      markers.push({
+        id: 'driver-truck-position',
+        lng: driverLoc.lng,
+        lat: driverLoc.lat,
+        title: 'Mi Camioneta / Ubicación en Vivo',
+        label: '🚚',
+        color: '#f59e0b',
+        popupHtml: `
+          <div class="p-1">
+            <span class="badge bg-warning text-dark mb-1">Mi Vehículo</span>
+            <strong class="d-block text-dark">${this.currentDriverName()}</strong>
+            <small class="text-muted d-block">Ubicación GPS actual</small>
+          </div>
+        `
+      });
+    }
 
     // 1. Entregas pendientes (numeradas: 1, 2, 3...)
     this.pendingDeliveries().forEach((o, index) => {
@@ -264,6 +333,11 @@ export class DeliveryComponent implements OnInit, OnDestroy {
       }
     }
 
+    const dLoc = this.driverLocation();
+    if (dLoc) {
+      return [dLoc.lng, dLoc.lat];
+    }
+
     const firstWithGps = this.visibleOrders().find((o) => o.lng != null && o.lat != null);
     if (firstWithGps && firstWithGps.lng && firstWithGps.lat) {
       return [firstWithGps.lng, firstWithGps.lat];
@@ -291,6 +365,7 @@ export class DeliveryComponent implements OnInit, OnDestroy {
       this.loadDrivers(cmpUuid);
     }
     this.loadDeliveryData();
+    this.detectDriverLocation(true);
   }
 
   public ngOnDestroy(): void {
@@ -747,6 +822,54 @@ export class DeliveryComponent implements OnInit, OnDestroy {
     this.routeOptimizationStats.set(result);
 
     setTimeout(() => this.mapComponent?.resize(), 100);
+  }
+
+  /**
+   * Obtiene la posición GPS en vivo del chofer para detectar y enfocar la parada más cercana.
+   */
+  public detectDriverLocation(autoFocus = false): void {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      this.driverGpsError.set('Geolocalización no soportada en este navegador.');
+      return;
+    }
+
+    this.isLocatingDriver.set(true);
+    this.driverGpsError.set(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        this.isLocatingDriver.set(false);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        this.driverLocation.set({ lat, lng });
+
+        if (autoFocus) {
+          const closest = this.closestPendingDelivery();
+          if (closest) {
+            this.focusOrderOnMap(closest.order);
+          } else {
+            setTimeout(() => {
+              this.mapComponent?.resize();
+              this.mapComponent?.map?.flyTo({ center: [lng, lat], zoom: 15 });
+            }, 100);
+          }
+        }
+      },
+      (err) => {
+        this.isLocatingDriver.set(false);
+        console.warn('GPS chofer no disponible:', err.message);
+        if (err.code === err.PERMISSION_DENIED) {
+          this.driverGpsError.set('Permiso de GPS denegado.');
+        } else {
+          this.driverGpsError.set('No se pudo obtener la posición del dispositivo.');
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 15000
+      }
+    );
   }
 
   /**

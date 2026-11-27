@@ -160,6 +160,23 @@
       </div>
 
       <div class="d-flex align-items-center gap-2">
+        <!-- Botón GPS / Enfoque Chofer -->
+        <button
+          type="button"
+          class="btn btn-sm shadow-sm d-inline-flex align-items-center gap-1"
+          [ngClass]="driverLocation() ? 'btn-outline-primary' : 'btn-outline-secondary'"
+          [disabled]="isLocatingDriver()"
+          (click)="detectDriverLocation(true)"
+          title="Detectar mi ubicación actual y enfocar la parada más cercana"
+        >
+          @if (isLocatingDriver()) {
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+          } @else {
+            <i class="bi bi-crosshair text-primary"></i>
+          }
+          <span class="d-none d-sm-inline fw-semibold">Mi GPS</span>
+        </button>
+
         <!-- Botón de Optimización Inteligente de Ruta (TSP) -->
         @if (!isRouteOptimized()) {
           <button
@@ -297,12 +314,37 @@
       </div>
     }
 
+    <!-- Banner Proactivo: Parada más cercana detectada por GPS -->
+    @if (closestPendingDelivery(); as closest) {
+      <div class="alert alert-primary py-2 px-3 small mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2 shadow-sm border-primary-subtle bg-primary-subtle">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-geo-alt-fill text-danger fs-5"></i>
+          <div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-primary">PARADA MÁS CERCANA</span>
+              <strong class="text-dark">{{ closest.order.customerName }}</strong>
+              <span class="text-primary fw-bold">({{ closest.distanceFormatted }})</span>
+            </div>
+            <small class="text-muted d-block">{{ closest.order.address }}</small>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm btn-primary py-1 px-3 fw-semibold shadow-sm d-inline-flex align-items-center gap-1"
+          (click)="focusOrderOnMap(closest.order)"
+        >
+          <i class="bi bi-crosshair"></i>Ver Parada
+        </button>
+      </div>
+    }
+
     @if (activeDeliveryView() === 'LIST' || activeDeliveryView() === 'SPLIT') {
       <div class="d-flex flex-column gap-3">
         @for (order of pendingDeliveries(); track order.id; let i = $index) {
           <div
             class="ats-card delivery-card p-3 p-lg-4"
             [class.border-primary]="selectedOrderForMap() === order.id"
+            [class.closest-delivery-card]="closestPendingDelivery()?.order?.id === order.id"
             [style.border-width.px]="selectedOrderForMap() === order.id ? 2 : 1"
           >
             <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2 mb-2">
@@ -312,6 +354,11 @@
                     #{{ i + 1 }}
                   </span>
                   <span class="fw-bold fs-5 text-dark">{{ order.customerName }}</span>
+                  @if (closestPendingDelivery()?.order?.id === order.id) {
+                    <span class="badge bg-primary text-white border fw-bold" style="font-size: 0.65rem;">
+                      <i class="bi bi-geo-alt-fill me-1"></i>Más Cercana ({{ closestPendingDelivery()?.distanceFormatted }})
+                    </span>
+                  }
                   @if (order.hasCredit) {
                     <span class="badge bg-info-subtle text-info border border-info-subtle fw-semibold" style="font-size: 0.65rem;">
                       <i class="bi bi-journal-check me-1"></i>CTA. CTE.
